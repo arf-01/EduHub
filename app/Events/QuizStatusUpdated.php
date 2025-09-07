@@ -10,41 +10,36 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
+
+
 class QuizStatusUpdated implements ShouldBroadcastNow
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, SerializesModels;
 
-    /**
-     * Create a new event instance.
-     */
     public $quizId;
     public $roomName;
-    public $start;
-    public function __construct($quizId, $roomName,$start )
+    public $startDatetime;
+    public $endDatetime;
+
+    public function __construct($quizId, $roomName, $startDatetime, $duration)
     {
         $this->quizId = $quizId;
         $this->roomName = $roomName;
-        $this->start = $start;
+        $this->startDatetime = $startDatetime;
+        $this->endDatetime = $startDatetime->copy()->addSeconds($duration);
     }
 
-    /**
-     * Get the channels the event should broadcast on.
-     *
-     * @return array<int, \Illuminate\Broadcasting\Channel>
-     */
     public function broadcastOn()
     {
-         
-              return  new Channel('room.' . $this->roomName);
-        
+        return new Channel('room.' . $this->roomName);
     }
-    public function broadcastWith()
-{
-    \Log::info('Broadcasting QuizStatusUpdated', ['quizId' => $this->quizId, 'start' => $this->start]);
-    return [
-        'quizId' => $this->quizId,
-        'start' => $this->start,
-    ];
-}
 
+    public function broadcastWith()
+    {
+        return [
+            'quizId' => $this->quizId,
+            'startDatetime' => $this->startDatetime,
+            'endDatetime' => $this->endDatetime,
+        ];
+    }
 }

@@ -20,7 +20,7 @@ return new class extends Migration
 
     // Only set foreign key for quiz_id
     $table->foreign('quiz_id')->references('id')->on('quizzes')->onDelete('cascade');
-    // $table->unique(['student_id', 'quiz_id']);
+    $table->unique(['student_id', 'quiz_id']);
 });
         
     }

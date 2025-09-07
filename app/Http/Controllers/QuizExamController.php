@@ -20,24 +20,23 @@ class QuizExamController extends Controller
     public function takeQuiz(Request $request, $quiz_id)
     {
         $studentId = session('student_id');
-        Log::info('Student ID from session: ' . $studentId);
+       
 
         if (!$studentId) {
             return redirect()->route('quiz.listStud')->with('error', 'Please enter the quiz room first.');
         }
 
         $quiz = Quiz::with('questions')->findOrFail($quiz_id);
-
-        $startDatetime = Carbon::parse($quiz->start_datetime)->setTimezone('Asia/Dhaka');
+        $startDatetime = Carbon::parse($quiz->start_datetime);
         $duration = $quiz->duration;
-        $finishDateTime = $startDatetime->copy()->addMinutes($duration);
+        $finishDateTime = $startDatetime->copy()->addSeconds($duration);
         $current = Carbon::now('Asia/Dhaka');
 
-        if ($current->lt($startDatetime)) {
+        if ($current->lte($startDatetime)) {
             return back()->with('error', 'The quiz has not started yet.');
         }
 
-        if ($current->gt($finishDateTime)) {
+        if ($current->gte($finishDateTime)) {
             return back()->with('error', 'The quiz has already ended.');
         }
 
@@ -83,7 +82,7 @@ class QuizExamController extends Controller
         $quiz->duration = $totalDuration;
         $quiz->save();
 
-        event(new QuizStatusUpdated($quiz_id, Auth::user()->room_name, $current));
+       // event(new QuizStatusUpdated($quiz_id, Auth::user()->room_name, $current,$totalDuration));
         
         return redirect()->route('quiz.list');
     }

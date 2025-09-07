@@ -15,30 +15,29 @@ class BoardController extends Controller
 {
     public function showboard($id)
     {
-        // Fetch the results for the specific quiz (by quiz_id)
-        // Eager load details and their questions for showing details inline
+        
         $results = Result::with('details.question')
             ->where('quiz_id', $id)
             ->orderBy('score', 'desc')
             ->get();
          $quiz = Quiz::findOrFail($id);
-        // Pass the results to the view
+       
         return view('teacher.leaderboard', compact('quiz','results'));
     }
 
-    //use App\Models\Result;
+ 
 
     public function performanceGraph($id)
     {
         $results = Result::where('quiz_id', $id)->get();
 
-        // Get total number of questions in this quiz
+       
         $totalQuestions = Question::where('quiz_id', $id)->count();
         if ($totalQuestions == 0) {
             return back()->with('error', 'No questions found for this quiz.');
         }
 
-        // Initialize percentage-based buckets
+        
         $buckets = [
             '100%' => 0,
             '>80%' => 0,
@@ -84,7 +83,7 @@ class BoardController extends Controller
             ->orderBy('score', 'desc')
             ->get();
 
-        // Add rank (sequential, no tie handling)
+        
         $rank = 1;
         foreach ($results as $result) {
             $result->rank = $rank++;
@@ -95,5 +94,14 @@ class BoardController extends Controller
 
     }
 }
+
+public function destroy($quizId)
+{
+    
+    \App\Models\Result::where('quiz_id', $quizId)->delete();
+
+    return redirect()->back();
+}
+
 
 }

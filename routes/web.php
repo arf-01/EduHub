@@ -76,6 +76,9 @@ Route::delete('/quiz/{id}', [App\Http\Controllers\QuizListController::class, 'de
 Route::get('/quiz/{id}/leaderboard', [App\Http\Controllers\BoardController::class, 'showboard'])->name('quiz.leaderboard');
 Route::get('/quiz/{id}/performance', [App\Http\Controllers\BoardController::class, 'performanceGraph'])->name('quiz.performance');
 Route::get('/leaderboard/export/{id}', [App\Http\Controllers\BoardController::class, 'export']);
+Route::delete('/leaderboard/{quiz}', [App\Http\Controllers\BoardController::class, 'destroy'])
+     ->name('leaderboard.delete');
+
 
 
 
@@ -125,22 +128,6 @@ Route::post('/report-tab-switch', function (Request $request) {
 });
 
 
-///////////
-
-Route::get('/api/quiz/{id}/timing', function ($id) {
-    $quiz = \App\Models\Quiz::findOrFail($id);
-    $start = \Carbon\Carbon::parse($quiz->start_datetime)->setTimezone('Asia/Dhaka');
-    $end = $start->copy()->addMinutes($quiz->duration);
-
-    return response()->json([
-        'start_datetime' => $start->toIso8601String(),
-        'end_datetime' => $end->toIso8601String(),
-    ]);
-});
-
-
-
-//////////////
 
 
 Route::get('/password-reset', function () {

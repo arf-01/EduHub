@@ -37,25 +37,12 @@
                         $startDatetime = \Carbon\Carbon::parse($quiz->start_datetime)->setTimezone('Asia/Dhaka');
                         $endDatetime = $startDatetime->copy()->addSeconds($quiz->duration);
 
-                        // Format duration in H M S
-                        $seconds = $quiz->duration;
-                        $hours = floor($seconds / 3600);
-                        $minutes = floor(($seconds % 3600) / 60);
-                        $remainingSeconds = $seconds % 60;
+
                     @endphp
 
                     <div class="bg-gray-800 rounded-2xl p-6 shadow-lg hover:shadow-indigo-500/30 transition-all duration-300">
                         <h2 class="text-2xl font-semibold text-indigo-300 mb-2">{{ $quiz->title }}</h2>
-                        <p class="text-sm text-gray-300 mb-3">
-                            Duration: 
-                            @if ($hours > 0)
-                                {{ $hours }}h 
-                            @endif
-                            @if ($minutes > 0 || $hours > 0)
-                                {{ $minutes }}m 
-                            @endif
-                            {{ $remainingSeconds }}s
-                        </p>
+                        
 
                         <div id="quiz-status-{{ $quiz->id }}"
                              class="quiz-status font-medium"
@@ -81,56 +68,46 @@
 
 
 <script>
+    /*
     function updateQuizStatus(quizId, startTime, endTime) {
-        const now = new Date();
-        const start = new Date(startTime);
-        const end = new Date(endTime);
-        const statusEl = document.getElementById(`quiz-status-${quizId}`);
-        const quizLink = `/quiz/${quizId}/take`;
+    const now = new Date();
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const statusEl = document.getElementById(`quiz-status-${quizId}`);
+    const quizLink = `/quiz/${quizId}/take`;
 
-        if (!statusEl) return;
+    if (!statusEl) return;
 
-        if (now < start) {
-            statusEl.innerHTML = `<span class="text-yellow-300">Available on ${start.toLocaleString()}</span>`;
-            setTimeout(() => {
-                statusEl.innerHTML = `<a href="${quizLink}" class="text-green-400 hover:underline">Running</a>`;
-            }, start - now);
-            setTimeout(() => {
-                statusEl.innerHTML = `<span class="text-red-400">Finished</span>`;
-            }, end - now);
-        } else if (now >= start && now < end) {
-            statusEl.innerHTML = `<a href="${quizLink}" class="text-green-400 hover:underline">Running</a>`;
-            setTimeout(() => {
-                statusEl.innerHTML = `<span class="text-red-400">Finished</span>`;
-            }, end - now);
-        } else {
-            statusEl.innerHTML = `<span class="text-red-400">Finished</span>`;
-        }
+    if (now < start) {
+        // Quiz hasn't started yet
+        statusEl.innerHTML = `<span class="text-yellow-300">Available on ${start.toLocaleString()}</span>`;
+    } else if (now >= start && now < end) {
+        // Quiz is running
+        statusEl.innerHTML = `<a href="${quizLink}" class="text-green-400 hover:underline">Running</a>`;
+    } else {
+        // Quiz has finished
+        statusEl.innerHTML = `<span class="text-red-400">Finished</span>`;
     }
+}
 
-    function initQuizTimers() {
-        document.querySelectorAll('.quiz-status').forEach(el => {
-            const id = el.dataset.id;
-            const start = el.dataset.start;
-            const end = el.dataset.end;
-            updateQuizStatus(id, start, end);
-        });
-    }
+
+
+
+
+
+
 
     document.addEventListener("DOMContentLoaded", function () {
-        initQuizTimers();
-        const room = "{{ session('room_name') }}";
-        if (room) {
-            window.Echo.channel(`room.${room}`)
-                .listen("QuizStatusUpdated", (e) => {
-                    const quizId = e.quizId ?? 'Unknown';
-                    fetch(`/api/quiz/${quizId}/timing`)
-                        .then(res => res.json())
-                        .then(data => {
-                            updateQuizStatus(quizId, data.start_datetime, data.end_datetime);
-                        });
-                });
-        }
-    });
+      
+      const room = "{{ session('room_name') }}";
+
+       if (room) {
+        window.Echo.channel(`room.${room}`)
+            .listen("QuizStatusUpdated", (e) => {
+                
+                updateQuizStatus(e.quizId, e.startDatetime, e.endDatetime);
+            });
+    }
+    });*/
 </script>
 @endsection
