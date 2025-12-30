@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Quiz;
 use Carbon\Carbon;
-use App\Events\QuizStatusUpdated;
 use Illuminate\Support\Facades\Auth;
 
 

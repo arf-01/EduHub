@@ -24,7 +24,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {  
         
-        URL::forceScheme('https');
+        // URL::forceScheme('https');
+        // Uncomment above line for production deployment
     
         Livewire::component('quiz-timer', QuizTimer::class);
     }

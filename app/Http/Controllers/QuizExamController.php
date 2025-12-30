@@ -9,7 +9,6 @@ use App\Models\Quiz;
 use App\Models\Question;
 use App\Models\Result;
 use Carbon\Carbon;
-use App\Events\QuizStatusUpdated;
 use Illuminate\Support\Facades\Auth;
 
 
