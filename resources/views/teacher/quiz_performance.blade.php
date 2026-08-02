@@ -32,50 +32,58 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const ctx = document.getElementById('scoreChart').getContext('2d');
+    // Wait for Chart.js to be loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure Chart is available
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded');
+            return;
+        }
 
-    const labels = @json(array_keys($buckets));
-    const data = @json(array_values($buckets));
+        const ctx = document.getElementById('scoreChart').getContext('2d');
 
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Number of Students',
-                data: data,
-                backgroundColor: 'rgba(139, 92, 246, 0.6)', // indigo
-                borderColor: 'rgba(139, 92, 246, 1)',
-                borderWidth: 2,
-                borderRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                x: {
-                    ticks: { color: '#d1d5db' },
-                    grid: { color: '#374151' }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: '#d1d5db', stepSize: 1 },
-                    grid: { color: '#374151' }
-                }
+        const labels = @json(array_keys($buckets));
+        const data = @json(array_values($buckets));
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Number of Students',
+                    data: data,
+                    backgroundColor: 'rgba(139, 92, 246, 0.6)', // indigo
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    borderWidth: 2,
+                    borderRadius: 6
+                }]
             },
-            plugins: {
-                legend: { labels: { color: '#d1d5db' } },
-                tooltip: {
-                    backgroundColor: '#1f2937',
-                    titleColor: '#fff',
-                    bodyColor: '#fff',
-                    borderColor: '#4f46e5',
-                    borderWidth: 1
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        ticks: { color: '#d1d5db' },
+                        grid: { color: '#374151' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#d1d5db', stepSize: 1 },
+                        grid: { color: '#374151' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#d1d5db' } },
+                    tooltip: {
+                        backgroundColor: '#1f2937',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#4f46e5',
+                        borderWidth: 1
+                    }
                 }
             }
-        }
+        });
     });
 </script>
 @endpush

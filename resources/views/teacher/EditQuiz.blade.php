@@ -5,10 +5,6 @@
 @section('content')
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-{{-- Flatpickr CSS --}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
-
 <div class="max-w-7xl mx-auto py-10 px-4 text-white">
     {{-- Quiz Info --}}
     <div class="bg-[#1E293B] shadow-xl rounded-xl p-6 mb-10">
@@ -160,9 +156,6 @@
         </div>
     </div>
 </div>
-
-{{-- Flatpickr JS --}}
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 {{-- Scripts --}}
 <script>
