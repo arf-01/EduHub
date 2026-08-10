@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ $quiz->title }} - Quiz</title>
     <meta name="csrf-token" content="{{ csrf_token() }}" />
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.ts'])
     <style>
         body { background: linear-gradient(to bottom right, #0f0f1a, #1a1a2e); color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
         .btn { background: linear-gradient(to right, #6e57e0, #8f57ea); color: white; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: all 0.3s ease; }

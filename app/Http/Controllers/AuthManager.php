@@ -17,7 +17,7 @@ class AuthManager extends Controller
 
     public function registration()
     {
-        return view('teacher\registration');
+        return view('teacher.registration');
     }
 
     public function loginPost(Request $request)
@@ -30,12 +30,12 @@ class AuthManager extends Controller
         $credentials = $request->only('email', 'password');
      
         if (Auth::attempt($credentials))
-        return view('teacher\addquiz');
+        return view('teacher.addquiz');
     }
 
     public function login()
     {
-        return view('teacher\teacherauth');
+        return view('teacher.teacherauth');
     }
 
     public function registrationPost(Request $request)
@@ -59,7 +59,7 @@ class AuthManager extends Controller
 
 
         Auth::login($user);
-        return view('teacher\addquiz');
+        return view('teacher.addquiz');
           
          }
 

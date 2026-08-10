@@ -57,7 +57,7 @@ Route::get('/store-quiz', function () {
 ///////////////////////
 
 Route::get('/teacher', function () {
-    return view('teacher\addquiz');
+    return view('teacher.addquiz');
 })->name('teacher.view');
 
 //////////////
@@ -66,8 +66,8 @@ Route::get('/teacher', function () {
 
 Route::get('/quiz-list', [App\Http\Controllers\QuizListController::class, 'showQuizList'])->name('quiz.list');
 Route::get('/quiz/{id}/details', [App\Http\Controllers\QuizListController::class, 'showQuizDetails'])->name('quiz.details');
-Route::post('/enter-room', [App\Http\Controllers\QuizListController::class, 'enterRoom'])->name('enter.room');
-Route::get('/quiz-listStud', [App\Http\Controllers\QuizListController::class, 'showQuizListToStudents'])->name('quiz.listStud');
+Route::match(['get', 'post'], '/enter-room', function() { return redirect()->route('student.app'); })->name('enter.room');
+Route::get('/quiz-listStud', function() { return redirect()->route('student.app'); })->name('quiz.listStud');
 Route::delete('/quiz/{id}', [App\Http\Controllers\QuizListController::class, 'destroy'])->name('quiz.destroy');
 
 
@@ -86,7 +86,7 @@ Route::delete('/leaderboard/{quiz}', [App\Http\Controllers\BoardController::clas
 /////////////////////
 
 
-Route::get('/quiz/{id}/take', [QuizExamController::class, 'takeQuiz'])->name('quiz.take');
+Route::get('/quiz/{id}/take', function() { return redirect()->route('student.app'); })->name('quiz.take');
 Route::post('/quiz/{quiz}/submit/{student}', [QuizExamController::class, 'submitQuizAnswered'])->name('quiz.submit');
 Route::post('/quiz/startnow/{id}', [QuizExamController::class, 'startNow'])->name('quiz.startnow');
 Route::post('/quiz/violation', [QuizExamController::class, 'sendViolationEmail']);
@@ -144,3 +144,7 @@ Route::get('/reset-password/{token}', function ($token) {
 
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.update');
 
+// Svelte Resilient Quiz App
+Route::get('/student-app', function () {
+    return view('quiz');
+})->name('student.app');
