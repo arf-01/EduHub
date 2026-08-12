@@ -38,10 +38,8 @@
                 }
             }
 
-            // Background sync: check for pending submissions
-            if (isOnline) {
-                await syncPendingSubmissions();
-            }
+            // Initial sync attempt
+            await syncPendingSubmissions();
         } catch (err: any) {
             console.error("Initialization error:", err);
             initError = err.message || "Failed to initialize Dexie database.";
@@ -67,14 +65,18 @@
                 // Mark as synced
                 await db.pendingSubmissions.update(submission.id!, { synced: 1 });
                 
+                // Success! Set online status
+                isOnline = true;
+                
                 // If this is the active user's pending submission, show them the score
                 if (submission.quizId === activeQuizId && submission.studentId === studentId) {
                     quizScore = response.score;
                     quizTotal = response.total;
                     hasPendingSubmission = false;
                 }
-            } catch (error) {
-                console.error('Background sync failed for submission', submission.id, error);
+            } catch (error: any) {
+                isOnline = false; // Force UI badge to Offline whenever network fails
+                console.warn('Sync waiting for stable connection.');
             }
         }
     }

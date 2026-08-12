@@ -74,7 +74,8 @@ class QuizApiController extends Controller
                     'option1',
                     'option2',
                     'option3',
-                    'option4'
+                    'option4',
+                    'duration'
                 );
             }])
             ->first();
@@ -106,7 +107,8 @@ class QuizApiController extends Controller
                         'option1',
                         'option2',
                         'option3',
-                        'option4'
+                        'option4',
+                        'duration'
                     );
                 }])
                 ->first();
@@ -197,7 +199,7 @@ class QuizApiController extends Controller
         $request->validate([
             'quiz_id' => 'required|integer|exists:quizzes,id',
             'student_id' => 'required|string',
-            'answers' => 'required|array'
+            'answers' => 'present|array'
         ]);
 
         $quizId = $request->quiz_id;

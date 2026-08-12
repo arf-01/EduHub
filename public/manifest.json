@@ -1,0 +1,9 @@
+{
+    "name": "EduHub Quiz App",
+    "short_name": "EduHub",
+    "description": "An interactive offline-capable quiz application for students.",
+    "start_url": "/student-app",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#4f46e5"
+}

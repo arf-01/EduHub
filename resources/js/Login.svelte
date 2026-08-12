@@ -99,7 +99,7 @@
 
 <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
     <div class="mb-6">
-        <h2 class="text-3xl font-extrabold text-gray-900">Join a Quiz</h2>
+        <h2 class="text-3xl font-extrabold text-gray-900">Quiz Access</h2>
         <p class="text-gray-500 mt-2">Enter the room name provided by your teacher.</p>
     </div>
 

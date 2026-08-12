@@ -18,6 +18,7 @@ export interface Question {
     option2: string;
     option3: string;
     option4: string;
+    duration: number;
     // NOTE: right_option is explicitly omitted for security
 }
 

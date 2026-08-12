@@ -33,12 +33,13 @@
 
         // Check if there is an existing state for crash recovery
         const savedState = await db.quizState.where('quizId').equals(quizId).first();
-        if (savedState && savedState.studentId === studentId) {
+        if (savedState && savedState.studentId === studentId && savedState.remainingTime > 0) {
             currentQuestionIndex = savedState.currentQuestionId;
             remainingTime = savedState.remainingTime;
         } else {
-            // New session
-            remainingTime = quiz.duration > 0 ? quiz.duration * 60 : 0; // 0 means unlimited
+            // New session or stale state reset
+            currentQuestionIndex = 0;
+            remainingTime = questions[0]?.duration || 60;
         }
 
         // Load the saved answer for the current question if it exists
@@ -53,8 +54,6 @@
     });
 
     function startTimer() {
-        if (!quiz || quiz.duration <= 0) return; // No timer if duration is unlimited
-
         timerInterval = window.setInterval(async () => {
             if (remainingTime > 0) {
                 remainingTime -= 1;
@@ -64,8 +63,13 @@
                     await saveState();
                 }
             } else {
-                clearInterval(timerInterval);
-                await forceSubmit();
+                // Time's up for this question, auto-advance or submit
+                if (currentQuestionIndex < questions.length - 1) {
+                    await nextQuestion();
+                } else {
+                    clearInterval(timerInterval);
+                    await forceSubmit();
+                }
             }
         }, 1000);
     }
@@ -111,19 +115,12 @@
         if (currentQuestionIndex < questions.length - 1) {
             selectedOption = null;
             currentQuestionIndex += 1;
+            remainingTime = questions[currentQuestionIndex]?.duration || 60; // Reset timer for the new question
             await loadAnswerForCurrentQuestion();
             await saveState();
         }
     }
 
-    async function prevQuestion() {
-        if (currentQuestionIndex > 0) {
-            selectedOption = null;
-            currentQuestionIndex -= 1;
-            await loadAnswerForCurrentQuestion();
-            await saveState();
-        }
-    }
 
     async function forceSubmit() {
         if (isSubmitting) return;
@@ -139,16 +136,21 @@
                 selectedOption: a.selectedOption
             }));
 
-            if (isOnline) {
-                // Online submit
-                const response = await submitQuiz(quizId, studentId, payloadAnswers);
-                
-                // Clean up local state
-                await db.quizState.where('quizId').equals(quizId).delete();
-                await db.answers.clear();
-                
-                onComplete(response.score, response.total);
-            } else {
+            let submittedOnline = false;
+
+            if (isOnline && navigator.onLine) {
+                try {
+                    const response = await submitQuiz(quizId, studentId, payloadAnswers);
+                    await db.quizState.where('quizId').equals(quizId).delete();
+                    await db.answers.clear();
+                    onComplete(response.score, response.total);
+                    submittedOnline = true;
+                } catch (netError: any) {
+                    console.warn("Online submission failed due to network error. Queueing offline...", netError);
+                }
+            }
+
+            if (!submittedOnline) {
                 // Offline queue
                 await db.pendingSubmissions.add({
                     studentId,
@@ -165,7 +167,6 @@
             }
         } catch (error: any) {
             console.error("Submission failed", error);
-            alert(error.message || "Failed to submit. Please try again.");
         } finally {
             isSubmitting = false;
         }
@@ -193,7 +194,7 @@
                 <h2 class="text-xl font-extrabold">{quiz.title}</h2>
                 <p class="text-indigo-200 text-sm mt-1 font-medium tracking-wide uppercase">Question {currentQuestionIndex + 1} of {questions.length}</p>
             </div>
-            {#if quiz && quiz.duration > 0}
+            {#if currentQuestion}
             <div class="flex items-center gap-2 bg-indigo-800/50 px-4 py-2 rounded-lg shadow-inner border border-indigo-500/30">
                 <svg class="w-5 h-5 {remainingTime < 60 ? 'text-red-400 animate-pulse' : 'text-indigo-200'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -322,18 +323,12 @@
             </div>
         {/if}
         <div class="bg-gray-50 border-t border-gray-200 p-4 sm:px-6 flex justify-between shrink-0">
-            <button 
-                onclick={prevQuestion} 
-                disabled={currentQuestionIndex === 0}
-                class="px-5 py-2.5 rounded-lg font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-                Previous
-            </button>
+            <div></div> <!-- Empty div to maintain flex spacing since Previous button is gone -->
 
             {#if currentQuestionIndex === questions.length - 1}
                 <button 
                     onclick={forceSubmit}
-                    disabled={isSubmitting || !isOnline}
+                    disabled={isSubmitting}
                     class="px-6 py-2.5 rounded-lg font-bold text-white bg-green-600 hover:bg-green-700 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-70 flex items-center"
                 >
                     {#if isSubmitting}
