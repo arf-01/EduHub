@@ -33,8 +33,14 @@
                 const savedState = await db.quizState.toArray();
                 if (savedState.length > 0) {
                     const state = savedState[0];
-                    activeQuizId = state.quizId;
-                    studentId = state.studentId;
+                    const qCount = await db.questions.where('quizId').equals(state.quizId).count();
+                    if (qCount > 0) {
+                        activeQuizId = state.quizId;
+                        studentId = state.studentId;
+                    } else {
+                        // Stale orphan state without questions; clean it up
+                        await db.quizState.clear();
+                    }
                 }
             }
 

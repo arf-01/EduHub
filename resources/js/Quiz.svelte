@@ -20,6 +20,7 @@
     let isSubmitting = $state(false);
 
     let timerInterval: number;
+    let lastTickTime = Date.now();
 
     onMount(async () => {
         // Load quiz and questions from IndexedDB
@@ -31,11 +32,33 @@
             return;
         }
 
-        // Check if there is an existing state for crash recovery
+        // Restore state with wall-clock time deduction
         const savedState = await db.quizState.where('quizId').equals(quizId).first();
         if (savedState && savedState.studentId === studentId && savedState.remainingTime > 0) {
-            currentQuestionIndex = savedState.currentQuestionId;
-            remainingTime = savedState.remainingTime;
+            const savedTimestamp = savedState.lastSaved ? new Date(savedState.lastSaved).getTime() : Date.now();
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - savedTimestamp) / 1000));
+
+            let qIndex = savedState.currentQuestionId;
+            let rem = savedState.remainingTime - elapsedSeconds;
+
+            // If time ran out for the question while away, advance across questions
+            while (rem <= 0 && qIndex < questions.length - 1) {
+                qIndex += 1;
+                const nextQDuration = questions[qIndex]?.duration || 60;
+                rem += nextQDuration;
+            }
+
+            if (rem <= 0 && qIndex >= questions.length - 1) {
+                // Entire remaining quiz time expired while offline/away
+                currentQuestionIndex = questions.length - 1;
+                remainingTime = 0;
+                await loadAnswerForCurrentQuestion();
+                await forceSubmit();
+                return;
+            } else {
+                currentQuestionIndex = Math.min(qIndex, questions.length - 1);
+                remainingTime = Math.max(1, rem);
+            }
         } else {
             // New session or stale state reset
             currentQuestionIndex = 0;
@@ -44,34 +67,70 @@
 
         // Load the saved answer for the current question if it exists
         await loadAnswerForCurrentQuestion();
+        await saveState();
+
+        // Listen for tab visibility changes (e.g. phone lock / tab switch)
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         // Start timer
+        lastTickTime = Date.now();
         startTimer();
     });
 
     onDestroy(() => {
         clearInterval(timerInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
     });
 
-    function startTimer() {
-        timerInterval = window.setInterval(async () => {
-            if (remainingTime > 0) {
-                remainingTime -= 1;
-                
-                // Auto-save state every 5 seconds
-                if (remainingTime % 5 === 0) {
-                    await saveState();
-                }
-            } else {
-                // Time's up for this question, auto-advance or submit
-                if (currentQuestionIndex < questions.length - 1) {
-                    await nextQuestion();
+    function handleVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+            const now = Date.now();
+            const elapsed = Math.max(0, Math.floor((now - lastTickTime) / 1000));
+            lastTickTime = now;
+
+            if (elapsed > 0) {
+                remainingTime = Math.max(0, remainingTime - elapsed);
+                if (remainingTime <= 0) {
+                    handleTimeExpiry();
                 } else {
-                    clearInterval(timerInterval);
-                    await forceSubmit();
+                    saveState();
+                }
+            }
+        } else {
+            lastTickTime = Date.now();
+            saveState();
+        }
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        lastTickTime = Date.now();
+
+        timerInterval = window.setInterval(async () => {
+            const now = Date.now();
+            const deltaSeconds = Math.max(1, Math.floor((now - lastTickTime) / 1000));
+            lastTickTime = now;
+
+            if (remainingTime > 0) {
+                remainingTime = Math.max(0, remainingTime - deltaSeconds);
+                
+                // Save state to IndexedDB every tick
+                await saveState();
+
+                if (remainingTime <= 0) {
+                    await handleTimeExpiry();
                 }
             }
         }, 1000);
+    }
+
+    async function handleTimeExpiry() {
+        if (currentQuestionIndex < questions.length - 1) {
+            await nextQuestion();
+        } else {
+            clearInterval(timerInterval);
+            await forceSubmit();
+        }
     }
 
     async function saveState() {
@@ -109,6 +168,8 @@
             selectedOption: optionNum,
             answeredAt: new Date().toISOString()
         });
+
+        await saveState();
     }
 
     async function nextQuestion() {
@@ -116,15 +177,16 @@
             selectedOption = null;
             currentQuestionIndex += 1;
             remainingTime = questions[currentQuestionIndex]?.duration || 60; // Reset timer for the new question
+            lastTickTime = Date.now();
             await loadAnswerForCurrentQuestion();
             await saveState();
         }
     }
 
-
     async function forceSubmit() {
         if (isSubmitting) return;
         isSubmitting = true;
+        clearInterval(timerInterval);
         
         try {
             // 1. Gather all answers from Dexie
@@ -183,8 +245,27 @@
 </script>
 
 {#if !quiz || questions.length === 0}
-    <div class="text-center py-10">
-        <p class="text-gray-500">Preparing your quiz...</p>
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center space-y-5 border border-gray-100">
+        <div class="w-14 h-14 mx-auto rounded-full bg-amber-50 text-amber-500 border border-amber-200 flex items-center justify-center text-2xl shadow-inner">
+            ⚡
+        </div>
+        <div class="space-y-1.5">
+            <h3 class="text-lg font-bold text-gray-900">Session Expired or Empty</h3>
+            <p class="text-xs text-gray-500">No cached questions found for this quiz session.</p>
+        </div>
+        <button 
+            type="button" 
+            onclick={async () => {
+                try {
+                    await db.quizState.clear();
+                    await db.answers.clear();
+                } catch (e) {}
+                window.location.reload();
+            }}
+            class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-indigo-600/30 cursor-pointer"
+        >
+            Enter Room Name
+        </button>
     </div>
 {:else}
     <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl overflow-hidden flex flex-col h-[80vh] max-h-[800px]">
@@ -252,11 +333,7 @@
                 {/if}
             </div>
 
-            {#if currentQuestion.image}
-                <div class="mb-8 rounded-xl overflow-hidden border-2 border-gray-200 bg-white shadow-sm p-4 text-center">
-                    <img src={currentQuestion.imageData || `/storage/${currentQuestion.image}`} alt="Question figure" class="max-w-full h-auto object-contain max-h-80 mx-auto rounded-lg shadow-sm" />
-                </div>
-            {/if}
+
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Option 1 -->
@@ -313,42 +390,62 @@
             </div>
         </div>
 
-        <!-- Footer Actions -->
+        <!-- Sticky Bottom Action Bar -->
         {#if !isOnline}
-            <div class="bg-yellow-50 border-b border-yellow-200 p-4 flex items-center gap-3">
-                <svg class="w-5 h-5 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                </svg>
-                <p class="text-sm font-medium text-yellow-800">You are offline. Quiz cannot be submitted until your connection is restored.</p>
+            <div class="bg-amber-50 border-t border-amber-200 px-4 py-2.5 flex items-center justify-between text-xs text-amber-800 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span class="font-semibold">Offline Mode Active:</span>
+                    <span>Answers are saved locally and will auto-sync when online.</span>
+                </div>
+                <span class="font-mono text-[11px] bg-amber-200/60 px-2 py-0.5 rounded font-bold">Local Cache</span>
             </div>
         {/if}
-        <div class="bg-gray-50 border-t border-gray-200 p-4 sm:px-6 flex justify-between shrink-0">
-            <div></div> <!-- Empty div to maintain flex spacing since Previous button is gone -->
 
-            {#if currentQuestionIndex === questions.length - 1}
-                <button 
-                    onclick={forceSubmit}
-                    disabled={isSubmitting}
-                    class="px-6 py-2.5 rounded-lg font-bold text-white bg-green-600 hover:bg-green-700 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-70 flex items-center"
-                >
-                    {#if isSubmitting}
-                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Submitting...
-                    {:else}
-                        Submit Quiz
-                    {/if}
-                </button>
-            {:else}
-                <button 
-                    onclick={nextQuestion}
-                    class="px-5 py-2.5 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                >
-                    Next Question
-                </button>
-            {/if}
+        <div class="bg-white border-t border-gray-200 px-5 py-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-lg z-10">
+            <!-- Answer Status Feedback -->
+            <div class="flex items-center gap-2">
+                {#if selectedOption}
+                    <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <span class="text-emerald-500 font-bold">✓</span> Choice {String.fromCharCode(64 + selectedOption)} Selected
+                    </span>
+                {:else}
+                    <span class="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-300 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span>ℹ</span> Tap an option to select your answer
+                    </span>
+                {/if}
+            </div>
+
+            <!-- Action Button: Next or Submit -->
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                {#if currentQuestionIndex === questions.length - 1}
+                    <button 
+                        type="button"
+                        onclick={forceSubmit}
+                        disabled={isSubmitting}
+                        class="w-full sm:w-auto px-8 py-3 rounded-xl font-extrabold text-base text-white bg-emerald-600 hover:bg-emerald-500 active:scale-98 shadow-lg shadow-emerald-700/30 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer border border-emerald-500"
+                    >
+                        {#if isSubmitting}
+                            <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Submitting Exam...</span>
+                        {:else}
+                            <span>🚀 Submit Exam</span>
+                        {/if}
+                    </button>
+                {:else}
+                    <button 
+                        type="button"
+                        onclick={nextQuestion}
+                        class="w-full sm:w-auto px-7 py-3 rounded-xl font-bold text-base text-white bg-indigo-600 hover:bg-indigo-500 active:scale-98 shadow-lg shadow-indigo-700/30 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer border border-indigo-500"
+                    >
+                        <span>Next Question</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                {/if}
+            </div>
         </div>
     </div>
 {/if}

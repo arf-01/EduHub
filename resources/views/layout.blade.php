@@ -1,15 +1,19 @@
 <!doctype html>
-<html lang="en" class="h-full bg-slate-100">
+<html lang="en" class="h-full @yield('html_class', 'bg-slate-100')">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Quiz System')</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="manifest" href="/manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     @vite(['resources/css/app.css', 'resources/js/app.ts'])
+    @stack('head')
 </head>
-<body class="min-h-screen flex flex-col font-sans text-slate-800">
+<body class="min-h-screen flex flex-col font-sans @yield('body_class', 'text-slate-800')" style="font-family: 'Inter', system-ui, sans-serif;">
 
     <!-- Header -->
     @hasSection('custom_header')
@@ -32,9 +36,15 @@
     --}}
 
     <!-- Main Content -->
+    @hasSection('full_bleed')
+    <main class="flex-grow">
+        @yield('content')
+    </main>
+    @else
     <main class="flex-grow container mx-auto px-4 py-6">
         @yield('content')
     </main>
+    @endif
 
     <!-- Footer -->
     <footer class="bg-slate-800 text-white text-center py-4 mt-auto">

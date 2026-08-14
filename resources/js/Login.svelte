@@ -35,41 +35,21 @@
             const data = await joinQuiz(roomName, studentId);
 
             // Shuffle questions to prevent side-by-side cheating
-            const shuffledQuestions = shuffleArray(data.questions);
-            
-            // Pre-fetch images and convert them to Base64 in parallel for absolute offline compatibility
-            const questionsToInsert = await Promise.all(
-                shuffledQuestions.map(async (q: any) => {
-                    let base64Data: string | null = null;
-                    if (q.image) {
-                        try {
-                            const res = await fetch(`/storage/${q.image}`);
-                            if (res.ok) {
-                                const blob = await res.blob();
-                                base64Data = await new Promise<string>((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => resolve(reader.result as string);
-                                    reader.onerror = reject;
-                                    reader.readAsDataURL(blob);
-                                });
-                            }
-                        } catch (imgErr) {
-                            console.error(`Failed to pre-cache image /storage/${q.image}:`, imgErr);
-                        }
-                    }
-                    return {
-                        id: q.id,
-                        quizId: data.quiz.id,
-                        text: q.text,
-                        image: q.image,
-                        imageData: base64Data,
-                        option1: q.option1,
-                        option2: q.option2,
-                        option3: q.option3,
-                        option4: q.option4
-                    };
-                })
-            );
+            const shuffledQuestions = shuffleArray(data.questions || []);
+
+            // Map questions with duration for IndexedDB
+            const questionsToInsert = shuffledQuestions.map((q: any) => ({
+                id: q.id,
+                quizId: data.quiz.id,
+                text: q.text,
+                image: null,
+                imageData: null,
+                option1: q.option1,
+                option2: q.option2,
+                option3: q.option3,
+                option4: q.option4,
+                duration: Number(q.duration) || 60
+            }));
             
             // Store data in Dexie
             await db.transaction('rw', db.quizzes, db.questions, async () => {
