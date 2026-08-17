@@ -89,12 +89,14 @@ Route::delete('/leaderboard/{quiz}', [App\Http\Controllers\BoardController::clas
 Route::get('/quiz/{id}/take', function() { return redirect()->route('student.app'); })->name('quiz.take');
 Route::post('/quiz/{quiz}/submit/{student}', [QuizExamController::class, 'submitQuizAnswered'])->name('quiz.submit');
 Route::post('/quiz/startnow/{id}', [QuizExamController::class, 'startNow'])->name('quiz.startnow');
+Route::post('/quiz/endnow/{id}', [QuizExamController::class, 'endNow'])->name('quiz.endnow');
 Route::post('/quiz/violation', [QuizExamController::class, 'sendViolationEmail']);
 
 
 /////////////////////////
 Route::post('/store-result', [App\Http\Controllers\ResultController::class, 'storeResult'])->name('result.store');
-Route::get('/student/results/{student_id}', [ResultController::class, 'showResult'])->name('student.results');
+Route::get('/student/results/{student_id}/{quiz_id?}', [ResultController::class, 'showResult'])->name('student.results');
+Route::get('/quiz/{quiz_id}/analysis/{student_id}', [ResultController::class, 'showResultByQuiz'])->name('student.quiz.analysis');
 ////////////////
 
 

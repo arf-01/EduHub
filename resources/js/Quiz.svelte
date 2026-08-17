@@ -23,7 +23,6 @@
     let lastTickTime = Date.now();
 
     onMount(async () => {
-        // Load quiz and questions from IndexedDB
         quiz = await db.quizzes.get(quizId) || null;
         questions = await db.questions.where('quizId').equals(quizId).toArray();
         
@@ -32,7 +31,6 @@
             return;
         }
 
-        // Restore state with wall-clock time deduction
         const savedState = await db.quizState.where('quizId').equals(quizId).first();
         if (savedState && savedState.studentId === studentId && savedState.remainingTime > 0) {
             const savedTimestamp = savedState.lastSaved ? new Date(savedState.lastSaved).getTime() : Date.now();
@@ -41,7 +39,6 @@
             let qIndex = savedState.currentQuestionId;
             let rem = savedState.remainingTime - elapsedSeconds;
 
-            // If time ran out for the question while away, advance across questions
             while (rem <= 0 && qIndex < questions.length - 1) {
                 qIndex += 1;
                 const nextQDuration = questions[qIndex]?.duration || 60;
@@ -49,7 +46,6 @@
             }
 
             if (rem <= 0 && qIndex >= questions.length - 1) {
-                // Entire remaining quiz time expired while offline/away
                 currentQuestionIndex = questions.length - 1;
                 remainingTime = 0;
                 await loadAnswerForCurrentQuestion();
@@ -60,19 +56,15 @@
                 remainingTime = Math.max(1, rem);
             }
         } else {
-            // New session or stale state reset
             currentQuestionIndex = 0;
             remainingTime = questions[0]?.duration || 60;
         }
 
-        // Load the saved answer for the current question if it exists
         await loadAnswerForCurrentQuestion();
         await saveState();
 
-        // Listen for tab visibility changes (e.g. phone lock / tab switch)
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        // Start timer
         lastTickTime = Date.now();
         startTimer();
     });
@@ -98,27 +90,22 @@
             }
         } else {
             lastTickTime = Date.now();
-            saveState();
         }
     }
 
     function startTimer() {
         clearInterval(timerInterval);
-        lastTickTime = Date.now();
-
-        timerInterval = window.setInterval(async () => {
+        timerInterval = window.setInterval(() => {
             const now = Date.now();
-            const deltaSeconds = Math.max(1, Math.floor((now - lastTickTime) / 1000));
+            const elapsed = Math.max(0, Math.floor((now - lastTickTime) / 1000));
             lastTickTime = now;
 
-            if (remainingTime > 0) {
-                remainingTime = Math.max(0, remainingTime - deltaSeconds);
-                
-                // Save state to IndexedDB every tick
-                await saveState();
+            if (elapsed > 0) {
+                remainingTime = Math.max(0, remainingTime - elapsed);
+                saveState();
 
                 if (remainingTime <= 0) {
-                    await handleTimeExpiry();
+                    handleTimeExpiry();
                 }
             }
         }, 1000);
@@ -128,26 +115,24 @@
         if (currentQuestionIndex < questions.length - 1) {
             await nextQuestion();
         } else {
-            clearInterval(timerInterval);
             await forceSubmit();
         }
     }
 
     async function saveState() {
-        if (!quiz) return;
-        const state = await db.quizState.where('quizId').equals(quizId).first();
-        const newState = {
+        const stateToSave = {
             studentId,
             quizId,
             currentQuestionId: currentQuestionIndex,
             remainingTime,
             lastSaved: new Date().toISOString()
         };
-        
-        if (state && state.id) {
-            await db.quizState.update(state.id, newState);
+
+        const existing = await db.quizState.where('quizId').equals(quizId).first();
+        if (existing) {
+            await db.quizState.update(existing.id!, stateToSave);
         } else {
-            await db.quizState.add(newState);
+            await db.quizState.add(stateToSave);
         }
     }
 
@@ -162,7 +147,6 @@
         selectedOption = optionNum;
         const currentQ = questions[currentQuestionIndex];
         
-        // Auto-save answer to Dexie
         await db.answers.put({
             questionId: currentQ.id,
             selectedOption: optionNum,
@@ -176,7 +160,7 @@
         if (currentQuestionIndex < questions.length - 1) {
             selectedOption = null;
             currentQuestionIndex += 1;
-            remainingTime = questions[currentQuestionIndex]?.duration || 60; // Reset timer for the new question
+            remainingTime = questions[currentQuestionIndex]?.duration || 60;
             lastTickTime = Date.now();
             await loadAnswerForCurrentQuestion();
             await saveState();
@@ -189,10 +173,8 @@
         clearInterval(timerInterval);
         
         try {
-            // 1. Gather all answers from Dexie
             const allSavedAnswers = await db.answers.toArray();
             
-            // Format for API
             const payloadAnswers = allSavedAnswers.map(a => ({
                 questionId: a.questionId,
                 selectedOption: a.selectedOption
@@ -208,12 +190,11 @@
                     onComplete(response.score, response.total);
                     submittedOnline = true;
                 } catch (netError: any) {
-                    console.warn("Online submission failed due to network error. Queueing offline...", netError);
+                    console.warn("Online submission failed. Queueing offline...", netError);
                 }
             }
 
             if (!submittedOnline) {
-                // Offline queue
                 await db.pendingSubmissions.add({
                     studentId,
                     quizId,
@@ -222,9 +203,7 @@
                     synced: 0
                 });
                 
-                // Clean up local state so they can't re-enter
                 await db.quizState.where('quizId').equals(quizId).delete();
-                
                 onOfflineSubmit();
             }
         } catch (error: any) {
@@ -245,13 +224,13 @@
 </script>
 
 {#if !quiz || questions.length === 0}
-    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center space-y-5 border border-gray-100">
-        <div class="w-14 h-14 mx-auto rounded-full bg-amber-50 text-amber-500 border border-amber-200 flex items-center justify-center text-2xl shadow-inner">
+    <div class="edu-card p-8 w-full max-w-md text-center space-y-5 shadow-2xl">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center text-2xl">
             ⚡
         </div>
         <div class="space-y-1.5">
-            <h3 class="text-lg font-bold text-gray-900">Session Expired or Empty</h3>
-            <p class="text-xs text-gray-500">No cached questions found for this quiz session.</p>
+            <h3 class="text-lg font-bold text-white">Session Expired or Empty</h3>
+            <p class="text-xs text-slate-400">No cached questions found for this quiz session.</p>
         </div>
         <button 
             type="button" 
@@ -262,25 +241,28 @@
                 } catch (e) {}
                 window.location.reload();
             }}
-            class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-indigo-600/30 cursor-pointer"
+            class="edu-btn-primary w-full text-sm"
         >
             Enter Room Name
         </button>
     </div>
 {:else}
-    <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl overflow-hidden flex flex-col h-[80vh] max-h-[800px]">
+    <div class="edu-card w-full max-w-3xl overflow-hidden flex flex-col h-[82vh] max-h-[850px] shadow-2xl shadow-black/60 border-slate-800">
+        
         <!-- Quiz Header -->
-        <div class="bg-indigo-600 border-b border-indigo-700 p-5 sm:px-8 flex justify-between items-center shrink-0 rounded-t-xl text-white">
+        <div class="bg-slate-900/90 border-b border-slate-800 p-5 sm:px-8 flex justify-between items-center shrink-0">
             <div>
-                <h2 class="text-xl font-extrabold">{quiz.title}</h2>
-                <p class="text-indigo-200 text-sm mt-1 font-medium tracking-wide uppercase">Question {currentQuestionIndex + 1} of {questions.length}</p>
+                <h2 class="text-lg sm:text-xl font-extrabold text-white tracking-tight">{quiz.title}</h2>
+                <p class="text-indigo-300 text-xs mt-0.5 font-mono font-semibold uppercase tracking-wider">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                </p>
             </div>
             {#if currentQuestion}
-            <div class="flex items-center gap-2 bg-indigo-800/50 px-4 py-2 rounded-lg shadow-inner border border-indigo-500/30">
-                <svg class="w-5 h-5 {remainingTime < 60 ? 'text-red-400 animate-pulse' : 'text-indigo-200'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border font-mono {remainingTime < 30 ? 'bg-rose-950/80 border-rose-700/60 text-rose-300 animate-pulse' : 'bg-slate-950/80 border-slate-700/60 text-indigo-300'}">
+                <svg class="w-4 h-4 {remainingTime < 30 ? 'text-rose-400' : 'text-indigo-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
-                <span class="font-mono font-bold text-xl tracking-wider {remainingTime < 60 ? 'text-red-400' : 'text-white'}">
+                <span class="font-bold text-base tracking-wider">
                     {formatTime(remainingTime)}
                 </span>
             </div>
@@ -288,44 +270,42 @@
         </div>
 
         <!-- Progress Bar -->
-        <div class="w-full bg-gray-100 h-2 shrink-0">
-            <div class="bg-green-500 h-2 transition-all duration-500 ease-out" style="width: {progressPercentage}%"></div>
+        <div class="w-full bg-slate-950 h-1.5 shrink-0 overflow-hidden">
+            <div class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-1.5 transition-all duration-500 ease-out" style="width: {progressPercentage}%"></div>
         </div>
 
         <!-- Question Body -->
-        <div class="p-6 sm:p-10 flex-grow overflow-y-auto bg-gray-50/50">
-            <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-200/80 mb-8 space-y-4">
+        <div class="p-5 sm:p-8 flex-grow overflow-y-auto space-y-6" style="background:var(--edu-bg, #080b14);">
+            <div class="bg-slate-900/80 p-5 sm:p-7 rounded-2xl border border-slate-800 shadow-sm space-y-4">
                 {#if currentQuestion.text}
                     {#each parseContentWithCode(currentQuestion.text) as block}
                         {#if block.type === 'code'}
                             {@const highlighted = highlightCodeSyntax(block.content, block.language)}
-                            <!-- VS Code-Style Dark Code Editor Box -->
-                            <div class="rounded-xl overflow-hidden shadow-lg border border-slate-700 bg-[#0d1117] font-mono text-sm my-4">
-                                <!-- Code Editor Header -->
+                            <!-- Code Box -->
+                            <div class="rounded-xl overflow-hidden shadow-lg border border-slate-700/80 bg-[#0d1117] font-mono text-xs sm:text-sm my-3">
                                 <div class="bg-[#161b22] border-b border-slate-700/80 px-4 py-2 flex justify-between items-center text-xs text-slate-400 select-none">
                                     <div class="flex items-center gap-2">
                                         <div class="flex gap-1.5">
-                                            <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
-                                            <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                                            <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                                            <div class="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                                            <div class="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+                                            <div class="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
                                         </div>
-                                        <span class="ml-2 uppercase font-bold text-indigo-400 tracking-wider text-[11px] bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/40">
+                                        <span class="ml-2 uppercase font-bold text-indigo-400 tracking-wider text-[10px] bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/40">
                                             {block.language || 'code'}
                                         </span>
                                     </div>
                                 </div>
-                                <!-- Code Content with Line Numbers -->
-                                <div class="p-4 overflow-x-auto flex text-slate-200 text-sm leading-relaxed">
-                                    <div class="select-none text-slate-600 text-right pr-4 border-r border-slate-800 font-mono flex flex-col">
+                                <div class="p-4 overflow-x-auto flex text-slate-200 text-xs sm:text-sm leading-relaxed">
+                                    <div class="select-none text-slate-600 text-right pr-3 border-r border-slate-800 font-mono flex flex-col">
                                         {#each Array(highlighted.lineCount) as _, idx}
                                             <span>{idx + 1}</span>
                                         {/each}
                                     </div>
-                                    <pre class="pl-4 font-mono overflow-x-auto text-slate-200 whitespace-pre"><code>{@html highlighted.html}</code></pre>
+                                    <pre class="pl-3 font-mono overflow-x-auto text-slate-200 whitespace-pre"><code>{@html highlighted.html}</code></pre>
                                 </div>
                             </div>
                         {:else}
-                            <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 leading-snug">
+                            <h3 class="text-base sm:text-xl font-bold text-white leading-snug">
                                 {@html formatInlineCode(block.content)}
                             </h3>
                         {/if}
@@ -333,85 +313,56 @@
                 {/if}
             </div>
 
+            <!-- Options Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {#each [1, 2, 3, 4] as optNum}
+                    {@const optText = currentQuestion[`option${optNum}` as keyof Question]}
+                    {@const isSelected = selectedOption === optNum}
+                    {#if optText}
+                        <button 
+                            class="w-full text-left p-4 rounded-xl border-1.5 transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer {isSelected ? 'border-indigo-500 bg-indigo-950/60 shadow-lg shadow-indigo-600/15 ring-2 ring-indigo-500/40 text-indigo-200' : 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-800/80 text-slate-200'}"
+                            onclick={() => handleOptionSelect(optNum)}
+                        >
+                            <div class="flex items-center gap-3 pr-2 min-w-0">
+                                <span class="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs font-mono shrink-0 {isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                                    {String.fromCharCode(64 + optNum)}
+                                </span>
+                                <span class="text-sm sm:text-base font-medium leading-snug break-words">{@html formatInlineCode(String(optText))}</span>
+                            </div>
 
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Option 1 -->
-                <button 
-                    class="w-full text-left p-4 sm:p-5 rounded-xl border-2 transition-all duration-200 flex items-center justify-between {selectedOption === 1 ? 'border-indigo-600 bg-indigo-50/80 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}"
-                    onclick={() => handleOptionSelect(1)}
-                >
-                    <span class="text-gray-800 font-medium text-base sm:text-lg pr-4">{@html formatInlineCode(currentQuestion.option1)}</span>
-                    <div class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors {selectedOption === 1 ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'}">
-                        {#if selectedOption === 1}
-                            <div class="w-2 h-2 rounded-full bg-white"></div>
-                        {/if}
-                    </div>
-                </button>
-                
-                <!-- Option 2 -->
-                <button 
-                    class="w-full text-left p-4 sm:p-5 rounded-xl border-2 transition-all duration-200 flex items-center justify-between {selectedOption === 2 ? 'border-indigo-600 bg-indigo-50/80 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}"
-                    onclick={() => handleOptionSelect(2)}
-                >
-                    <span class="text-gray-800 font-medium text-base sm:text-lg pr-4">{@html formatInlineCode(currentQuestion.option2)}</span>
-                    <div class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors {selectedOption === 2 ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'}">
-                        {#if selectedOption === 2}
-                            <div class="w-2 h-2 rounded-full bg-white"></div>
-                        {/if}
-                    </div>
-                </button>
-
-                <!-- Option 3 -->
-                <button 
-                    class="w-full text-left p-4 sm:p-5 rounded-xl border-2 transition-all duration-200 flex items-center justify-between {selectedOption === 3 ? 'border-indigo-600 bg-indigo-50/80 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}"
-                    onclick={() => handleOptionSelect(3)}
-                >
-                    <span class="text-gray-800 font-medium text-base sm:text-lg pr-4">{@html formatInlineCode(currentQuestion.option3)}</span>
-                    <div class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors {selectedOption === 3 ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'}">
-                        {#if selectedOption === 3}
-                            <div class="w-2 h-2 rounded-full bg-white"></div>
-                        {/if}
-                    </div>
-                </button>
-
-                <!-- Option 4 -->
-                <button 
-                    class="w-full text-left p-4 sm:p-5 rounded-xl border-2 transition-all duration-200 flex items-center justify-between {selectedOption === 4 ? 'border-indigo-600 bg-indigo-50/80 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}"
-                    onclick={() => handleOptionSelect(4)}
-                >
-                    <span class="text-gray-800 font-medium text-base sm:text-lg pr-4">{@html formatInlineCode(currentQuestion.option4)}</span>
-                    <div class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors {selectedOption === 4 ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'}">
-                        {#if selectedOption === 4}
-                            <div class="w-2 h-2 rounded-full bg-white"></div>
-                        {/if}
-                    </div>
-                </button>
+                            <div class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors {isSelected ? 'border-indigo-400 bg-indigo-500' : 'border-slate-700'}">
+                                {#if isSelected}
+                                    <div class="w-2 h-2 rounded-full bg-white"></div>
+                                {/if}
+                            </div>
+                        </button>
+                    {/if}
+                {/each}
             </div>
         </div>
 
         <!-- Sticky Bottom Action Bar -->
         {#if !isOnline}
-            <div class="bg-amber-50 border-t border-amber-200 px-4 py-2.5 flex items-center justify-between text-xs text-amber-800 shrink-0">
+            <div class="bg-amber-950/60 border-t border-amber-800/50 px-4 py-2 flex items-center justify-between text-xs text-amber-300 shrink-0">
                 <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span class="font-semibold">Offline Mode Active:</span>
-                    <span>Answers are saved locally and will auto-sync when online.</span>
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span class="font-bold">Offline Mode:</span>
+                    <span>Answers saved locally and encrypted.</span>
                 </div>
-                <span class="font-mono text-[11px] bg-amber-200/60 px-2 py-0.5 rounded font-bold">Local Cache</span>
+                <span class="font-mono text-[10px] bg-amber-900/60 px-2 py-0.5 rounded font-bold border border-amber-700/50">Local Buffer</span>
             </div>
         {/if}
 
-        <div class="bg-white border-t border-gray-200 px-5 py-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-lg z-10">
+        <div class="bg-slate-900 border-t border-slate-800 px-5 py-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-lg z-10">
             <!-- Answer Status Feedback -->
             <div class="flex items-center gap-2">
                 {#if selectedOption}
-                    <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                        <span class="text-emerald-500 font-bold">✓</span> Choice {String.fromCharCode(64 + selectedOption)} Selected
+                    <span class="edu-badge bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        <span class="text-emerald-400 font-bold">✓</span> Choice {String.fromCharCode(64 + selectedOption)} Selected
                     </span>
                 {:else}
-                    <span class="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-300 rounded-full text-xs font-medium flex items-center gap-1">
-                        <span>ℹ</span> Tap an option to select your answer
+                    <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                        <span class="text-indigo-400">ℹ</span> Tap an option to select your answer
                     </span>
                 {/if}
             </div>
@@ -423,10 +374,10 @@
                         type="button"
                         onclick={forceSubmit}
                         disabled={isSubmitting}
-                        class="w-full sm:w-auto px-8 py-3 rounded-xl font-extrabold text-base text-white bg-emerald-600 hover:bg-emerald-500 active:scale-98 shadow-lg shadow-emerald-700/30 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer border border-emerald-500"
+                        class="edu-btn-primary w-full sm:w-auto px-7 py-2.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 shadow-emerald-700/30 border border-emerald-500"
                     >
                         {#if isSubmitting}
-                            <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -439,7 +390,7 @@
                     <button 
                         type="button"
                         onclick={nextQuestion}
-                        class="w-full sm:w-auto px-7 py-3 rounded-xl font-bold text-base text-white bg-indigo-600 hover:bg-indigo-500 active:scale-98 shadow-lg shadow-indigo-700/30 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer border border-indigo-500"
+                        class="edu-btn-primary w-full sm:w-auto px-6 py-2.5 text-sm font-bold shadow-indigo-700/30"
                     >
                         <span>Next Question</span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>

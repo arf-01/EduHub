@@ -15,179 +15,176 @@ use Illuminate\Support\Facades\Log;
 class QuizApiController extends Controller
 {
     /**
-     * Join a quiz room
+     * Get all quizzes for a room with real-time status (live, scheduled, idle, ended, submitted)
      */
-    public function join(Request $request)
+    public function roomQuizzes(Request $request)
     {
-        $totalStart = microtime(true);
-       
-
         $request->validate([
             'room_name' => 'required|string',
             'student_id' => 'required|string',
         ]);
 
-        $validationTime = microtime(true);
-
         $roomName = $request->room_name;
         $studentId = $request->student_id;
 
-        // ============================================================
-        // 1. Find the teacher
-        // ============================================================
-
-        $start = microtime(true);
-
         $teacher = User::where('room_name', $roomName)->first();
 
-        $teacherQueryTime = (microtime(true) - $start) * 1000;
-
-        Log::info('JOIN - Teacher query', [
-            'time_ms' => round($teacherQueryTime, 2),
-        ]);
-
         if (!$teacher) {
-            return response()->json(['error' => 'Room not found.'], 404);
+            return response()->json(['error' => 'Room not found. Please verify the room name.'], 404);
         }
-
-        // ============================================================
-        // 2. Find the active quiz + questions
-        // ============================================================
 
         $now = Carbon::now();
 
-        $start = microtime(true);
+        $quizzes = Quiz::where('userid', $teacher->id)
+            ->select('id', 'title', 'start_datetime', 'duration', 'created_at', 'userid')
+            ->withCount('questions')
+            ->where(function ($q) use ($now) {
+                // Include: idle (no start), scheduled/live/recently-ended (within last 24 h)
+                $q->whereNull('start_datetime')
+                  ->orWhere('start_datetime', '>=', $now->copy()->subDay());
+            })
+            ->orderBy('created_at', 'desc')
+            ->limit(20) // safety cap — prevents unbounded growth under load
+            ->get();
 
-        $activeQuiz = Quiz::where('userid', $teacher->id)
-            ->where('start_datetime', '<=', $now)
-            ->whereRaw(
-                'DATE_ADD(start_datetime, INTERVAL duration MINUTE) >= ?',
-                [$now]
-            )
-            ->orderBy('start_datetime', 'desc')
-            ->with(['questions' => function ($query) {
-                $query->select(
-                    'id',
-                    'quiz_id',
-                    'text',
-                    'image',
-                    'option1',
-                    'option2',
-                    'option3',
-                    'option4',
-                    'duration'
-                );
-            }])
+        $studentResults = Result::whereIn('quiz_id', $quizzes->pluck('id'))
+            ->where('student_id', $studentId)
+            ->get()
+            ->keyBy('quiz_id');
+
+        $quizList = $quizzes->map(function ($quiz) use ($now, $studentResults) {
+            $hasSubmitted = isset($studentResults[$quiz->id]);
+            $studentResult = $hasSubmitted ? $studentResults[$quiz->id] : null;
+
+            $startTime = $quiz->start_datetime ? Carbon::parse($quiz->start_datetime) : null;
+            // duration stores total quiz duration in SECONDS (sum of per-question durations).
+            $durationSeconds = max(60, (int)($quiz->duration ?: ($quiz->questions_count * 60)));
+            $endTime = $startTime ? $startTime->copy()->addSeconds($durationSeconds) : null;
+
+            // Determine accurate real-time status.
+            // A quiz with 0 questions is always idle — it can't be started.
+            if ($quiz->questions_count === 0) {
+                $status = 'idle';
+            } elseif ($hasSubmitted) {
+                $status = 'submitted';
+            } elseif ($startTime) {
+                if ($now->lt($startTime)) {
+                    $status = 'scheduled';
+                } elseif ($now->between($startTime, $endTime)) {
+                    $status = 'live';
+                } else {
+                    $status = 'ended';
+                }
+            } else {
+                $status = 'idle';
+            }
+
+            // server_time is returned once at the root level — omitted here to keep payload lean.
+            return [
+                'id'             => $quiz->id,
+                'title'         => $quiz->title,
+                'status'         => $status,
+                'question_count' => $quiz->questions_count,
+                'duration'       => $durationSeconds,
+                'start_datetime' => $startTime ? $startTime->toIso8601String() : null,
+                'end_datetime'   => $endTime ? $endTime->toIso8601String() : null,
+                'score'          => $studentResult ? $studentResult->score : null,
+                'total'          => $quiz->questions_count,
+            ];
+        });
+
+        return response()->json([
+            'teacher_name' => $teacher->name,
+            'room_name' => $teacher->room_name,
+            'student_id' => $studentId,
+            'server_time' => $now->toIso8601String(),
+            'quizzes' => $quizList,
+        ]);
+    }
+
+    /**
+     * Start an active/live quiz and fetch its question bank for local IndexedDB caching
+     */
+    public function start(Request $request)
+    {
+        $request->validate([
+            'quiz_id' => 'required|integer|exists:quizzes,id',
+            'student_id' => 'required|string',
+        ]);
+
+        $quizId = $request->quiz_id;
+        $studentId = $request->student_id;
+
+        // Check if student already submitted
+        $existingResult = Result::where('quiz_id', $quizId)
+            ->where('student_id', $studentId)
             ->first();
 
-        $activeQuizQueryTime = (microtime(true) - $start) * 1000;
-
-        Log::info('JOIN - Active quiz + questions', [
-            'time_ms' => round($activeQuizQueryTime, 2),
-        ]);
-
-        // ============================================================
-        // Fallback: get latest quiz if no active quiz found
-        // ============================================================
-
-        $fallbackQueryTime = 0;
-
-        if (!$activeQuiz) {
-
-            $start = microtime(true);
-
-            $activeQuiz = Quiz::where('userid', $teacher->id)
-                ->orderBy('start_datetime', 'desc')
-                ->with(['questions' => function ($query) {
-                    $query->select(
-                        'id',
-                        'quiz_id',
-                        'text',
-                        'image',
-                        'option1',
-                        'option2',
-                        'option3',
-                        'option4',
-                        'duration'
-                    );
-                }])
-                ->first();
-
-            $fallbackQueryTime = (microtime(true) - $start) * 1000;
-
-            Log::info('JOIN - Fallback quiz + questions', [
-                'time_ms' => round($fallbackQueryTime, 2),
-            ]);
-        }
-
-        if (!$activeQuiz) {
+        if ($existingResult) {
+            $quiz = Quiz::withCount('questions')->findOrFail($quizId);
             return response()->json([
-                'error' => 'No active quiz found for this room.'
-            ], 404);
+                'error' => 'You have already submitted this quiz.',
+                'score' => $existingResult->score,
+                'total' => $quiz->questions_count,
+                'status' => 'submitted'
+            ], 400);
         }
 
-        // ============================================================
-        // 3. Build response
-        // ============================================================
+        $quiz = Quiz::with(['questions' => function ($query) {
+            $query->select(
+                'id',
+                'quiz_id',
+                'text',
+                'image',
+                'option1',
+                'option2',
+                'option3',
+                'option4',
+                'duration'
+            );
+        }])->findOrFail($quizId);
 
-        $responseStart = microtime(true);
+        $now = Carbon::now();
+        $startTime = $quiz->start_datetime ? Carbon::parse($quiz->start_datetime) : null;
+        $durationSeconds = max(60, (int)($quiz->duration ?: ($quiz->questions->count() * 60)));
+        $endTime = $startTime ? $startTime->copy()->addSeconds($durationSeconds) : null;
 
-        $response = response()->json([
+        // Verify if quiz is started and not ended
+        if (!$startTime) {
+            return response()->json(['error' => 'This quiz has not been started by the teacher yet.'], 403);
+        }
+
+        if ($now->lt($startTime)) {
+            return response()->json([
+                'error' => 'This quiz is scheduled and has not started yet.',
+                'start_datetime' => $startTime->toIso8601String(),
+                'server_time' => $now->toIso8601String()
+            ], 403);
+        }
+
+        // Allow a 1-minute buffer for clock jitter
+        if ($endTime && $now->gt($endTime->copy()->addMinutes(1))) {
+            return response()->json(['error' => 'This quiz has already ended.'], 403);
+        }
+
+        return response()->json([
             'student_id' => $studentId,
             'quiz' => [
-                'id' => $activeQuiz->id,
-                'title' => $activeQuiz->title,
-                'duration' => $activeQuiz->duration,
-                'start_datetime' => $activeQuiz->start_datetime,
+                'id' => $quiz->id,
+                'title' => $quiz->title,
+                'duration' => $durationSeconds,
+                'start_datetime' => $startTime->toIso8601String(),
             ],
-            'questions' => $activeQuiz->questions
+            'questions' => $quiz->questions,
         ]);
+    }
 
-        $responseTime = (microtime(true) - $responseStart) * 1000;
-
-        // ============================================================
-        // TOTAL TIME
-        // ============================================================
-
-        $totalTime = (microtime(true) - $totalStart) * 1000;
-
-        Log::info('JOIN - TOTAL PERFORMANCE', [
-            'validation_ms' => round(
-                ($validationTime - $totalStart) * 1000,
-                2
-            ),
-
-            'teacher_query_ms' => round(
-                $teacherQueryTime,
-                2
-            ),
-
-            'active_quiz_query_ms' => round(
-                $activeQuizQueryTime,
-                2
-            ),
-
-            'fallback_query_ms' => round(
-                $fallbackQueryTime,
-                2
-            ),
-
-            'response_build_ms' => round(
-                $responseTime,
-                2
-            ),
-
-            'total_ms' => round(
-                $totalTime,
-                2
-            ),
-
-            'quiz_id' => $activeQuiz->id,
-
-            'question_count' => $activeQuiz->questions->count(),
-        ]);
-
-        return $response;
+    /**
+     * Legacy join route kept for backward compatibility
+     */
+    public function join(Request $request)
+    {
+        return $this->roomQuizzes($request);
     }
 
 

@@ -1,6 +1,8 @@
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
-import 'flatpickr/dist/themes/material_blue.css';
+import 'flatpickr/dist/themes/dark.css';
 
 // Make flatpickr available globally
 window.flatpickr = flatpickr;
+export default flatpickr;
+

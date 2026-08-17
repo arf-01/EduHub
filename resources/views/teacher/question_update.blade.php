@@ -1,11 +1,14 @@
 @extends('layout')
 
-@section('title', 'Edit Question #' . $question->id . ' - ' . $quiz->title)
-@section('html_class', 'h-full bg-slate-950')
-@section('body_class', 'text-slate-100 bg-slate-950')
+@section('title', 'Edit Question #' . $question->id . ' — ' . $quiz->title . ' — EduHub')
 @section('full_bleed', true)
 
+@section('custom_header')
+    <x-nav role="teacher" :quiz-title="$quiz->title" />
+@endsection
+
 @section('content')
+<div style="background:var(--edu-bg); min-height:calc(100vh - 130px);">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <div class="max-w-7xl mx-auto py-6 sm:py-10 px-4 sm:px-6 space-y-6 text-slate-100">
@@ -60,4 +63,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 @endpush
+</div>
 @endsection

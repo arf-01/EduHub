@@ -6,13 +6,13 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Quiz;
 use App\Models\Question;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 class QuestionStudioTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_teacher_can_add_question_with_code_and_text()
     {
@@ -220,8 +220,8 @@ class QuestionStudioTest extends TestCase
             'duration' => 90,
         ]);
 
-        $response = $this->postJson('/api/quiz/join', [
-            'room_name' => 'CS90',
+        $response = $this->postJson("/api/quiz/start", [
+            'quiz_id' => $quiz->id,
             'student_id' => 'STU999',
         ]);
 

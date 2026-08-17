@@ -2,21 +2,12 @@
     import { db } from './db';
     import { joinQuiz } from './api';
     
-    let { onJoin } = $props<{ onJoin: (quizId: number, studentId: string) => void }>();
+    let { onJoin } = $props<{ onJoin: (roomName: string, studentId: string) => void }>();
 
     let roomName = $state('');
     let studentId = $state('');
     let loading = $state(false);
     let error = $state('');
-
-    function shuffleArray<T>(array: T[]): T[] {
-        const arr = [...array];
-        for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-    }
 
     async function handleJoin(e: Event) {
         e.preventDefault();
@@ -31,43 +22,20 @@
                 return;
             }
 
-            // Fetch quiz data from API
-            const data = await joinQuiz(roomName, studentId);
+            const trimmedRoom = roomName.trim();
+            const trimmedStudent = studentId.trim();
 
-            // Shuffle questions to prevent side-by-side cheating
-            const shuffledQuestions = shuffleArray(data.questions || []);
+            if (!trimmedRoom || !trimmedStudent) {
+                error = 'Please provide both Room Name and Student ID.';
+                loading = false;
+                return;
+            }
 
-            // Map questions with duration for IndexedDB
-            const questionsToInsert = shuffledQuestions.map((q: any) => ({
-                id: q.id,
-                quizId: data.quiz.id,
-                text: q.text,
-                image: null,
-                imageData: null,
-                option1: q.option1,
-                option2: q.option2,
-                option3: q.option3,
-                option4: q.option4,
-                duration: Number(q.duration) || 60
-            }));
+            // Verify room exists on server
+            const data = await joinQuiz(trimmedRoom, trimmedStudent);
             
-            // Store data in Dexie
-            await db.transaction('rw', db.quizzes, db.questions, async () => {
-                // Clear old quiz if necessary, or just put new one
-                await db.quizzes.put({
-                    id: data.quiz.id,
-                    title: data.quiz.title,
-                    duration: data.quiz.duration,
-                    start_datetime: data.quiz.start_datetime
-                });
-
-                // Clear old questions for this quiz and add new ones
-                await db.questions.where('quizId').equals(data.quiz.id).delete();
-                await db.questions.bulkAdd(questionsToInsert);
-            });
-
-            // Trigger the callback to switch view in App.svelte
-            onJoin(data.quiz.id, data.student_id);
+            // Trigger transition to Lobby in App.svelte
+            onJoin(data.room_name, data.student_id);
             
         } catch (err: any) {
             error = err.message || 'An error occurred. Please check the room name and try again.';
@@ -77,57 +45,80 @@
     }
 </script>
 
-<div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
-    <div class="mb-6">
-        <h2 class="text-3xl font-extrabold text-gray-900">Quiz Access</h2>
-        <p class="text-gray-500 mt-2">Enter the room name provided by your teacher.</p>
-    </div>
-
-    {#if error}
-        <div class="bg-red-50 text-red-700 p-3 rounded-md text-sm mb-4 border border-red-200">
-            {error}
-        </div>
-    {/if}
-
-    <form onsubmit={handleJoin} class="space-y-4 text-left">
-        <div>
-            <label for="roomName" class="block text-sm font-medium text-gray-700">Room Name</label>
-            <input 
-                type="text" 
-                id="roomName" 
-                bind:value={roomName}
-                required
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-                placeholder="e.g. Science101"
-            />
+<div class="relative w-full max-w-md edu-animate-scale-in">
+    <div class="edu-card p-8 sm:p-10 shadow-2xl shadow-black/50 text-center">
+        <!-- Logo / Icon -->
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-5 edu-animate-float">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
         </div>
 
-        <div>
-            <label for="studentId" class="block text-sm font-medium text-gray-700">Student ID (Roll Number)</label>
-            <input 
-                type="text" 
-                id="studentId" 
-                bind:value={studentId}
-                required
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-                placeholder="e.g. 2107051"
-            />
+        <div class="mb-6">
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white">Join Quiz Room</h2>
+            <p class="text-sm mt-1" style="color:var(--edu-text2);">Enter your details to access your exams</p>
         </div>
 
-        <button 
-            type="submit" 
-            disabled={loading}
-            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-            {#if loading}
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        {#if error}
+            <div class="mb-5 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs sm:text-sm font-medium flex items-center gap-2 text-left">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                Joining...
-            {:else}
-                Join Room
-            {/if}
-        </button>
-    </form>
+                <span>{error}</span>
+            </div>
+        {/if}
+
+        <form onsubmit={handleJoin} class="space-y-5 text-left">
+            <div>
+                <label for="roomName" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--edu-text2);">
+                    Room Name
+                </label>
+                <input 
+                    type="text" 
+                    id="roomName" 
+                    bind:value={roomName}
+                    required
+                    class="edu-input" 
+                    placeholder="e.g. CS101-FINAL"
+                />
+            </div>
+
+            <div>
+                <label for="studentId" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--edu-text2);">
+                    Student ID (Roll Number)
+                </label>
+                <input 
+                    type="text" 
+                    id="studentId" 
+                    bind:value={studentId}
+                    required
+                    class="edu-input" 
+                    placeholder="e.g. 2107051"
+                />
+            </div>
+
+            <button 
+                type="submit" 
+                disabled={loading}
+                class="edu-btn-primary w-full text-base py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {#if loading}
+                    <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Joining Room...</span>
+                {:else}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                    </svg>
+                    <span>Enter Room</span>
+                {/if}
+            </button>
+        </form>
+
+        <p class="mt-6 text-xs" style="color:var(--edu-muted);">
+            Offline-resilient exam portal · Automatic sync upon reconnection
+        </p>
+    </div>
 </div>

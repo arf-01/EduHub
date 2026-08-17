@@ -1,11 +1,14 @@
 @extends('layout')
 
-@section('title', $quiz->title . ' - Quiz Management')
-@section('html_class', 'h-full bg-slate-950')
-@section('body_class', 'text-slate-100 bg-slate-950')
+@section('title', $quiz->title . ' — Quiz Management — EduHub')
 @section('full_bleed', true)
 
+@section('custom_header')
+    <x-nav role="teacher" :quiz-title="$quiz->title" />
+@endsection
+
 @section('content')
+<div style="background:var(--edu-bg); min-height:calc(100vh - 130px);">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <div class="max-w-7xl mx-auto py-6 sm:py-10 px-4 sm:px-6 space-y-8 text-slate-100">
@@ -147,37 +150,99 @@
 
     <!-- 4. Schedule / Start Quiz Section -->
     <div id="schedule-section" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-        <div class="border-b border-slate-800 px-5 sm:px-6 py-4">
+        <div class="border-b border-slate-800 px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
             <h3 class="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <span>⏱️ Schedule & Release Quiz</span>
             </h3>
+            
+            <!-- Dynamic Status Badge -->
+            @php
+                $now = \Carbon\Carbon::now();
+                $startTime = $quiz->start_datetime ? \Carbon\Carbon::parse($quiz->start_datetime) : null;
+                $durationSec = $quiz->duration ?: ($quiz->questions->count() * 60);
+                $endTime = $startTime ? $startTime->copy()->addSeconds($durationSec) : null;
+                
+                $quizStatus = 'idle';
+                if ($startTime) {
+                    if ($now->lt($startTime)) {
+                        $quizStatus = 'scheduled';
+                    } elseif ($now->between($startTime, $endTime)) {
+                        $quizStatus = 'live';
+                    } else {
+                        $quizStatus = 'ended';
+                    }
+                }
+            @endphp
+
+            @if ($quizStatus === 'live')
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/60 flex items-center gap-1.5 animate-pulse">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> LIVE NOW (Closes at {{ $endTime->format('H:i') }})
+                </span>
+            @elseif ($quizStatus === 'scheduled')
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-500/60 flex items-center gap-1.5">
+                    <span>⏱️</span> Scheduled for {{ $startTime->format('d M, H:i') }}
+                </span>
+            @elseif ($quizStatus === 'ended')
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                    <span>🏁</span> Quiz Ended
+                </span>
+            @else
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                    ⏸️ Not Started (Idle)
+                </span>
+            @endif
         </div>
+
         <div class="p-5 sm:p-6 space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Schedule for later -->
-                <form action="{{ route('quiz.schedule', $quiz->id) }}" method="POST" class="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                <form action="{{ route('quiz.schedule', $quiz->id) }}" method="POST" class="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
                     @csrf
-                    <label for="start_datetime" class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        Set Scheduled Date & Time
-                    </label>
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <input type="text" id="start_datetime" name="start_datetime" placeholder="Choose date and time" class="w-full rounded-xl bg-slate-900 text-white border border-slate-700 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shrink-0">
-                            Save Schedule
-                        </button>
+                    <div>
+                        <label for="start_datetime" class="block text-xs font-bold text-slate-300 uppercase tracking-wider cursor-pointer">
+                            Set Scheduled Date & Time
+                        </label>
+                        <p class="text-xs text-slate-400 mt-1">Students will see a live countdown in their room lobby.</p>
+                    </div>
+                    <div class="space-y-2 pt-2">
+                        <input type="text" id="start_datetime" name="start_datetime" placeholder="Choose date and time (e.g. 2026-08-17 14:00)" value="{{ $quiz->start_datetime ? \Carbon\Carbon::parse($quiz->start_datetime)->format('Y-m-d H:i') : '' }}" class="w-full rounded-xl bg-slate-900 text-white border border-slate-700 px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer">
+                        <div class="flex items-center gap-2">
+                            <button type="submit" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition">
+                                Save Schedule
+                            </button>
+                            @if ($quiz->start_datetime)
+                                <button type="button" onclick="document.getElementById('start_datetime').value = ''; this.form.submit();" class="px-3 py-2 bg-slate-800 hover:bg-rose-900/50 hover:border-rose-700 text-slate-300 hover:text-rose-200 rounded-xl text-xs font-bold transition border border-slate-700" title="Clear Scheduled Time">
+                                    Clear
+                                </button>
+                            @endif
+                        </div>
                     </div>
                 </form>
 
-                <!-- Start Now -->
+                <!-- Instant Start -->
                 <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-3">
                     <div>
                         <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Instant Start</h4>
                         <p class="text-xs text-slate-400 mt-1">Make this quiz live for all students immediately.</p>
                     </div>
-                    <form action="{{ route('quiz.startnow', $quiz->id) }}" method="POST" class="text-right">
+                    <form action="{{ route('quiz.startnow', $quiz->id) }}" method="POST">
                         @csrf
-                        <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-950/40">
+                        <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-950/40">
                             🚀 Start Quiz Now
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Emergency / Manual End -->
+                <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-3">
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Close Quiz</h4>
+                        <p class="text-xs text-slate-400 mt-1">Immediately close exam window and finalize submissions.</p>
+                    </div>
+                    <form action="{{ route('quiz.endnow', $quiz->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to end this quiz now? Students will no longer be able to start.');">
+                        @csrf
+                        <button type="submit" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-rose-950/40">
+                            🛑 End Quiz Now
                         </button>
                     </form>
                 </div>
@@ -442,15 +507,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Flatpickr for Quiz Scheduling
-    if (typeof flatpickr !== 'undefined') {
-        flatpickr("#start_datetime", {
-            enableTime: true,
-            dateFormat: "Y-m-d H:i",
-            theme: "dark"
-        });
+    // Flatpickr for Quiz Scheduling with robust initialization
+    function initFlatpickr(attempts = 0) {
+        if (typeof window.flatpickr !== 'undefined') {
+            window.flatpickr("#start_datetime", {
+                enableTime: true,
+                dateFormat: "Y-m-d H:i",
+                time_24hr: true,
+                allowInput: true,
+                minuteIncrement: 1
+            });
+        } else if (attempts < 20) {
+            setTimeout(() => initFlatpickr(attempts + 1), 100);
+        }
     }
+    initFlatpickr();
+
+    // Session flash toasts
+    @if (session('success'))
+        window.showToast(@json(session('success')), 'success');
+    @endif
+    @if (session('error'))
+        window.showToast(@json(session('error')), 'error');
+    @endif
 });
 </script>
 @endpush
+</div>
 @endsection

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="en" class="h-full" style="background:#080b14;">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiz Portal — Student Access</title>
+    <title>Quiz Portal — EduHub</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="manifest" href="/manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.ts'])
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans antialiased min-h-screen">
+<body class="font-sans antialiased min-h-screen" style="background:var(--edu-bg, #080b14); color:var(--edu-text, #e2e8f0);">
     <div id="app"></div>
 
     <script>

@@ -1,109 +1,90 @@
 @extends('layout')
 
+@section('title', 'Set New Password — EduHub')
+
+@section('custom_header')
+    <x-nav />
+@endsection
+
+@section('suppress_layout_flash', true)
+
 @section('content')
-<style>
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f0f2f5;
-    margin: 0;
-    padding: 0;
-  }
+<div class="relative min-h-[calc(100vh-130px)] flex items-center justify-center px-4 py-16 overflow-hidden">
 
-  .container {
-    max-width: 400px;
-    margin: 60px auto;
-    background: #fff;
-    padding: 40px 30px;
-    border-radius: 10px;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-  }
+    <div class="edu-blob edu-animate-blob w-[500px] h-[500px] -top-40 -left-40 bg-indigo-700"></div>
+    <div class="edu-blob edu-animate-blob w-[400px] h-[400px] -bottom-32 -right-32 bg-violet-600" style="animation-delay:-3s;"></div>
 
-  h2 {
-    text-align: center;
-    margin-bottom: 25px;
-    color: #333;
-  }
+    <div class="relative z-10 w-full max-w-md edu-animate-scale-in">
+        <div class="edu-card p-8 sm:p-10 shadow-2xl shadow-black/50">
 
-  label {
-    font-size: 14px;
-    font-weight: 600;
-    display: block;
-    margin-bottom: 8px;
-    color: #333;
-  }
+            <div class="text-center mb-8">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-4">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-extrabold text-white mb-1">Set New Password</h1>
+                <p class="text-sm" style="color:var(--edu-text2);">Choose a secure password for your account</p>
+            </div>
 
-  input[type="email"],
-  input[type="password"] {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 15px;
-    margin-bottom: 20px;
-    border: 1.5px solid #ccc;
-    border-radius: 6px;
-    background-color: #f9f9f9;
-    transition: border-color 0.3s;
-  }
+            @if ($errors->any())
+                <div class="mb-5 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm space-y-1">
+                    @foreach ($errors->all() as $error)
+                        <div class="flex items-start gap-1.5">
+                            <span class="mt-0.5">•</span> {{ $error }}
+                        </div>
+                    @endforeach
+                </div>
+            @endif
 
-  input:focus {
-    border-color: #1877f2;
-    outline: none;
-    background-color: #fff;
-  }
+            <form method="POST" action="{{ route('password.update') }}" class="space-y-5">
+                @csrf
 
-  .btn-submit {
-    width: 100%;
-    padding: 12px;
-    background-color: #1877f2;
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.25s;
-  }
+                <input type="hidden" name="token" value="{{ $token }}">
 
-  .btn-submit:hover {
-    background-color: #145cc0;
-  }
+                <div>
+                    <label for="email" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--edu-text2);">
+                        Email Address
+                    </label>
+                    <input id="email" type="email" name="email" value="{{ old('email') }}" required
+                           placeholder="you@example.com"
+                           class="edu-input">
+                </div>
 
-  .error-box {
-    background: #ffe5e5;
-    border-left: 4px solid #f02849;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    border-radius: 6px;
-    color: #d1001f;
-    font-size: 14px;
-  }
-</style>
+                <div>
+                    <label for="password" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--edu-text2);">
+                        New Password
+                    </label>
+                    <input id="password" type="password" name="password" required
+                           placeholder="Min. 8 characters"
+                           class="edu-input">
+                </div>
 
-<div class="container">
-  <h2>Set a New Password</h2>
+                <div>
+                    <label for="password_confirmation" class="block text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--edu-text2);">
+                        Confirm Password
+                    </label>
+                    <input id="password_confirmation" type="password" name="password_confirmation" required
+                           placeholder="Re-enter password"
+                           class="edu-input">
+                </div>
 
-  @if ($errors->any())
-    <div class="error-box">
-      @foreach ($errors->all() as $error)
-        <p>{{ $error }}</p>
-      @endforeach
+                <button type="submit" id="reset-password-btn" class="edu-btn-primary w-full text-base py-3 mt-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Update Password
+                </button>
+            </form>
+
+            <p class="mt-8 text-center text-sm" style="color:var(--edu-text2);">
+                Back to
+                <a href="{{ route('login') }}" class="text-indigo-400 hover:text-indigo-300 font-semibold transition">
+                    Sign in
+                </a>
+            </p>
+        </div>
     </div>
-  @endif
-
-  <form method="POST" action="{{ route('password.update') }}">
-    @csrf
-
-    <input type="hidden" name="token" value="{{ $token }}">
-
-    <label for="email">Email</label>
-    <input id="email" type="email" name="email" value="{{ old('email') }}" required>
-
-    <label for="password">New Password</label>
-    <input id="password" type="password" name="password" required>
-
-    <label for="password_confirmation">Confirm Password</label>
-    <input id="password_confirmation" type="password" name="password_confirmation" required>
-
-    <button type="submit" class="btn-submit">Reset Password</button>
-  </form>
 </div>
 @endsection
