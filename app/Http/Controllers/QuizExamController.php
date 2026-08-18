@@ -71,21 +71,36 @@ class QuizExamController extends Controller
     // Set start time to now and calculate total quiz time from question durations
     public function startNow(Request $request, $id)
     {
-       $current = (Carbon::now('Asia/Dhaka'));
+        $current = Carbon::now();
 
         $quiz = Quiz::findOrFail($id);
-        $quiz_id=$id;
-        $totalDuration = $quiz->questions->sum('duration') ;
+        $totalDuration = $quiz->questions->sum('duration');
+        if ($totalDuration <= 0) {
+            $totalDuration = $quiz->questions->count() * 60;
+        }
         
         $quiz->start_datetime = $current;
         $quiz->duration = $totalDuration;
         $quiz->save();
-
-       // event(new QuizStatusUpdated($quiz_id, Auth::user()->room_name, $current,$totalDuration));
         
-        return redirect()->route('quiz.list');
+        return redirect()->back()->with('success', 'Quiz started live!');
     }
 
-   
+    // End/close the quiz immediately
+    public function endNow(Request $request, $id)
+    {
+        $quiz = Quiz::findOrFail($id);
+        
+        // If it was already running, set start_datetime to past so now > end
+        if ($quiz->start_datetime) {
+            $durationSeconds = $quiz->duration ?: ($quiz->questions->count() * 60);
+            $quiz->start_datetime = Carbon::now()->subSeconds($durationSeconds + 10);
+        } else {
+            $quiz->start_datetime = Carbon::now()->subMinutes(60);
+            $quiz->duration = 60;
+        }
+        $quiz->save();
 
+        return redirect()->back()->with('success', 'Quiz ended successfully!');
+    }
 }

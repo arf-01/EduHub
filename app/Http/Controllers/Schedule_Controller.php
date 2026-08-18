@@ -10,34 +10,35 @@ use Illuminate\Support\Facades\Auth;
 
 class Schedule_Controller extends Controller {
     public function schedule(Request $request, $quiz_id)
-{
-    
-    $request->validate([
-       'start_datetime' => 'nullable|date',
-      
+    {
+        $request->validate([
+            'start_datetime' => 'nullable|string',
+        ]);
 
-    ]);
+        $quiz = Quiz::findOrFail($quiz_id);
 
-    
-    $quiz = Quiz::findOrFail($quiz_id);
+        if ($request->filled('start_datetime')) {
+            try {
+                $startDatetime = Carbon::parse($request->start_datetime, config('app.timezone'));
+            } catch (\Exception $e) {
+                return redirect()->back()->with('error', 'Invalid date/time format provided.');
+            }
 
-    
-    $startDatetime = Carbon::createFromFormat('Y-m-d H:i', $request->start_datetime, config('app.timezone'));
+            $quiz->start_datetime = $startDatetime;
+            $totalDuration = $quiz->questions->sum('duration');
+            if ($totalDuration <= 0) {
+                $totalDuration = max(60, $quiz->questions->count() * 60);
+            }
+            $quiz->duration = $totalDuration;
+            $quiz->save();
 
-    
-    $quiz->start_datetime = $startDatetime;
-    $totalDuration = $quiz->questions->sum('duration');
-    $quiz->duration=$totalDuration;
+            return redirect()->back()->with('success', 'Quiz scheduled for ' . $startDatetime->format('d M, Y H:i'));
+        } else {
+            $quiz->start_datetime = null;
+            $quiz->save();
 
-     // event(new QuizStatusUpdated($quiz_id, Auth::user()->room_name, $startDatetime, $totalDuration));
-
-    
-    $quiz->save();
-
-    
-    return redirect()->route('quiz.list');
-       
-  }
-
+            return redirect()->back()->with('success', 'Quiz schedule cleared.');
+        }
+    }
 }
 

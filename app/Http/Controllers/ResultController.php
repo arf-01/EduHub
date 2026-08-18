@@ -91,16 +91,49 @@ $attempted = $details->where('selected_option', '!=', 0)->count();
 $skipped   = $total - $attempted; // faster than filtering again
 $score     = $score; // already calculated
 
-return view('student.detailedanalysis', compact(
-    'details',
-    'total',
-    'attempted',
-    'skipped',
-    'score'
-));
-
+    return view('student.detailedanalysis', compact(
+        'details',
+        'total',
+        'attempted',
+        'skipped',
+        'score'
+    ));
 }
 
+    public function showResult($student_id, $quiz_id = null, Request $request = null)
+    {
+        $query = Result::where('student_id', $student_id);
 
+        if ($quiz_id) {
+            $query->where('quiz_id', $quiz_id);
+        }
 
+        $result = $query->latest()->first();
+
+        if (!$result) {
+            return redirect()->route('student.app')->with('error', 'No quiz results found for Student ID: ' . $student_id);
+        }
+
+        $details = ResultDetail::where('result_id', $result->id)
+            ->with('question')
+            ->get();
+
+        $total     = $details->count();
+        $attempted = $details->where('selected_option', '!=', 0)->count();
+        $skipped   = $total - $attempted;
+        $score     = $result->score;
+
+        return view('student.detailedanalysis', compact(
+            'details',
+            'total',
+            'attempted',
+            'skipped',
+            'score'
+        ));
+    }
+
+    public function showResultByQuiz($quiz_id, $student_id)
+    {
+        return $this->showResult($student_id, $quiz_id);
+    }
 }

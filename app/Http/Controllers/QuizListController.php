@@ -18,7 +18,7 @@ public function showQuizList()
         $quizzes = Quiz::where('userid', Auth::id())->get();
 
         
-        return view('teacher\allquizes', compact('quizzes'));
+        return view('teacher.allquizes', compact('quizzes'));
     }
 
     

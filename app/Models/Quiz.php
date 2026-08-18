@@ -15,7 +15,12 @@ class Quiz extends Model
     protected $table = 'quizzes'; // Example: 'my_quizzes'
 
     // Specify the columns you want to allow mass assignment
-    protected $fillable = ['title', 'description','start_datetime','duration']; // Add the table's column names here
+    /**
+     * NOTE: `duration` stores the total quiz duration in SECONDS
+     * (sum of per-question durations set by the teacher).
+     * Do NOT treat this value as minutes.
+     */
+    protected $fillable = ['title', 'description', 'start_datetime', 'duration', 'userid'];
     public function questions()
     {
         return $this->hasMany(Question::class);
