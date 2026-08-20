@@ -1,22 +1,19 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\RoleController;
 use App\Http\Controllers\AuthManager;
+use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\QuestionControlller;
-use App\Http\Controllers\Schedule_Controller;
-use Illuminate\Console\Scheduling\Schedule;
-use App\Http\Controllers\ResultController;
 use App\Http\Controllers\QuizExamController;
+use App\Http\Controllers\ResultController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\Schedule_Controller;
+use App\Mail\QuizViolationMail;
+use App\Models\Quiz;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use App\Models\Quiz;
-use Illuminate\Support\Facades\Auth;
-use App\Mail\QuizViolationMail;
-use App\Http\Controllers\ForgotPasswordController;
-
-
+use Illuminate\Support\Facades\Route;
 
 /////////////////////////
 Route::get('/', function () {
@@ -26,10 +23,8 @@ Route::get('/', function () {
 Route::get('/TorS', [RoleController::class, 'TorS'])->name('TorS');
 //////////////////
 
-
-
 ///////////////
-Route::get('/registration',  [AuthManager::class, 'registration'])->name('registration');
+Route::get('/registration', [AuthManager::class, 'registration'])->name('registration');
 Route::post('/registration.post', [AuthManager::class, 'registrationPost'])->name('registration.post');
 Route::post('/login', [AuthManager::class, 'loginPost'])->name('login.post');
 Route::get('/registration.post', function () {
@@ -41,10 +36,10 @@ Route::get('/logout', function () {
     Auth::logout();
     request()->session()->invalidate();
     request()->session()->regenerateToken();
-    return redirect('/TorS?role=teacher'); 
+
+    return redirect('/TorS?role=teacher');
 })->name('logout');
 //////////////////
-
 
 Route::post('/questions/add', [QuestionControlller::class, 'add'])->name('questions.add');
 Route::delete('/questions/{id}', [QuestionControlller::class, 'destroyQuestion'])->name('questions.delete');
@@ -62,36 +57,32 @@ Route::get('/teacher', function () {
 
 //////////////
 
-
-
 Route::get('/quiz-list', [App\Http\Controllers\QuizListController::class, 'showQuizList'])->name('quiz.list');
 Route::get('/quiz/{id}/details', [App\Http\Controllers\QuizListController::class, 'showQuizDetails'])->name('quiz.details');
-Route::match(['get', 'post'], '/enter-room', function() { return redirect()->route('student.app'); })->name('enter.room');
-Route::get('/quiz-listStud', function() { return redirect()->route('student.app'); })->name('quiz.listStud');
+Route::match(['get', 'post'], '/enter-room', function () {
+    return redirect()->route('student.app');
+})->name('enter.room');
+Route::get('/quiz-listStud', function () {
+    return redirect()->route('student.app');
+})->name('quiz.listStud');
 Route::delete('/quiz/{id}', [App\Http\Controllers\QuizListController::class, 'destroy'])->name('quiz.destroy');
-
-
 
 //////////////////////
 Route::get('/quiz/{id}/leaderboard', [App\Http\Controllers\BoardController::class, 'showboard'])->name('quiz.leaderboard');
 Route::get('/quiz/{id}/performance', [App\Http\Controllers\BoardController::class, 'performanceGraph'])->name('quiz.performance');
 Route::get('/leaderboard/export/{id}', [App\Http\Controllers\BoardController::class, 'export']);
 Route::delete('/leaderboard/{quiz}', [App\Http\Controllers\BoardController::class, 'destroy'])
-     ->name('leaderboard.delete');
-
-
-
-
+    ->name('leaderboard.delete');
 
 /////////////////////
 
-
-Route::get('/quiz/{id}/take', function() { return redirect()->route('student.app'); })->name('quiz.take');
+Route::get('/quiz/{id}/take', function () {
+    return redirect()->route('student.app');
+})->name('quiz.take');
 Route::post('/quiz/{quiz}/submit/{student}', [QuizExamController::class, 'submitQuizAnswered'])->name('quiz.submit');
 Route::post('/quiz/startnow/{id}', [QuizExamController::class, 'startNow'])->name('quiz.startnow');
 Route::post('/quiz/endnow/{id}', [QuizExamController::class, 'endNow'])->name('quiz.endnow');
 Route::post('/quiz/violation', [QuizExamController::class, 'sendViolationEmail']);
-
 
 /////////////////////////
 Route::post('/store-result', [App\Http\Controllers\ResultController::class, 'storeResult'])->name('result.store');
@@ -99,11 +90,9 @@ Route::get('/student/results/{student_id}/{quiz_id?}', [ResultController::class,
 Route::get('/quiz/{quiz_id}/analysis/{student_id}', [ResultController::class, 'showResultByQuiz'])->name('student.quiz.analysis');
 ////////////////
 
-
 Route::post('quiz/{id}/schedule', [Schedule_Controller::class, 'schedule'])->name('quiz.schedule');
 
 ///////////////////
-
 
 Route::get('/questions/edit/{id}', [QuestionControlller::class, 'edittoupdate'])->name('questions.edit');
 Route::put('/questions/update/{id}', [QuestionControlller::class, 'update'])->name('questions.update');
@@ -129,9 +118,6 @@ Route::post('/report-tab-switch', function (Request $request) {
     return response()->json(['status' => 'Logged but no email sent.']);
 });
 
-
-
-
 Route::get('/password-reset', function () {
     return view('teacher.passwordreset');
 })->name('password.request');
@@ -142,7 +128,6 @@ Route::post('password/email', [ForgotPasswordController::class, 'sendResetLinkEm
 Route::get('/reset-password/{token}', function ($token) {
     return view('teacher.resetform', ['token' => $token]);
 })->name('password.reset');
-
 
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.update');
 

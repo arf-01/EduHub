@@ -20,9 +20,9 @@ class QuizViolationMail extends Mailable
     public function build()
     {
         return $this->subject('Quiz Violation Alert')
-                    ->view('emails.quiz_violation')
-                    ->with([
-                        'studentId' => $this->studentId,
-                    ]);
+            ->view('emails.quiz_violation')
+            ->with([
+                'studentId' => $this->studentId,
+            ]);
     }
 }

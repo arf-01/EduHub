@@ -17,7 +17,7 @@ class QuestionFactory extends Factory
     {
         return [
             'quiz_id' => Quiz::factory(),
-            'text' => fake()->sentence() . '?',
+            'text' => fake()->sentence().'?',
             'option1' => fake()->word(),
             'option2' => fake()->word(),
             'option3' => fake()->word(),

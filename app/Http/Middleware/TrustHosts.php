@@ -12,8 +12,8 @@ class TrustHosts extends Middleware
             'eduhab.com',
             'www.eduhab.com',
             'localhost',
-            '127.0.0.1'
-            
+            '127.0.0.1',
+
         ];
     }
 }

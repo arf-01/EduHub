@@ -2,14 +2,13 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Quiz;
 use App\Models\Question;
+use App\Models\Quiz;
 use App\Models\Result;
-use App\Models\ResultDetail;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\TestCase;
 
 class QuizApiIntegrationTest extends TestCase
 {
@@ -18,7 +17,7 @@ class QuizApiIntegrationTest extends TestCase
     public function test_room_quizzes_returns_404_for_nonexistent_room(): void
     {
         $response = $this->postJson('/api/quiz/room-quizzes', [
-            'room_name' => 'NON_EXISTENT_ROOM_' . uniqid(),
+            'room_name' => 'NON_EXISTENT_ROOM_'.uniqid(),
             'student_id' => 'STU101',
         ]);
 
@@ -29,7 +28,7 @@ class QuizApiIntegrationTest extends TestCase
     public function test_room_quizzes_returns_quiz_list_with_statuses(): void
     {
         $teacher = User::factory()->create([
-            'room_name' => 'ROOM_' . strtoupper(uniqid()),
+            'room_name' => 'ROOM_'.strtoupper(uniqid()),
         ]);
 
         $liveQuiz = Quiz::factory()->create([
@@ -72,8 +71,8 @@ class QuizApiIntegrationTest extends TestCase
                     'status',
                     'question_count',
                     'duration',
-                ]
-            ]
+                ],
+            ],
         ]);
 
         $data = $response->json('quizzes');
@@ -89,7 +88,7 @@ class QuizApiIntegrationTest extends TestCase
     public function test_quiz_start_returns_questions_when_quiz_is_live(): void
     {
         $teacher = User::factory()->create([
-            'room_name' => 'ROOM_' . strtoupper(uniqid()),
+            'room_name' => 'ROOM_'.strtoupper(uniqid()),
         ]);
 
         $quiz = Quiz::factory()->create([
@@ -131,8 +130,8 @@ class QuizApiIntegrationTest extends TestCase
             'student_id',
             'quiz' => ['id', 'title', 'duration', 'start_datetime'],
             'questions' => [
-                '*' => ['id', 'quiz_id', 'text', 'option1', 'option2', 'option3', 'option4', 'duration']
-            ]
+                '*' => ['id', 'quiz_id', 'text', 'option1', 'option2', 'option3', 'option4', 'duration'],
+            ],
         ]);
 
         $this->assertCount(2, $response->json('questions'));
@@ -182,7 +181,7 @@ class QuizApiIntegrationTest extends TestCase
             'answers' => [
                 ['questionId' => $q1->id, 'selectedOption' => 2], // correct
                 ['questionId' => $q2->id, 'selectedOption' => 1], // incorrect
-            ]
+            ],
         ]);
 
         $response->assertStatus(200);
@@ -233,7 +232,7 @@ class QuizApiIntegrationTest extends TestCase
             'student_id' => $studentId,
             'answers' => [
                 ['questionId' => $q->id, 'selectedOption' => 1],
-            ]
+            ],
         ]);
 
         $response->assertStatus(200);

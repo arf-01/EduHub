@@ -6,15 +6,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\DB;
 
 class AuthManager extends Controller
 {
-   
-  
-
     public function registration()
     {
         return view('teacher.registration');
@@ -24,13 +18,14 @@ class AuthManager extends Controller
     {
         $request->validate([
             'email' => 'required|email',
-            'password' => 'required'
+            'password' => 'required',
         ]);
 
         $credentials = $request->only('email', 'password');
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+
             return redirect()->intended(route('teacher.view'));
         }
 
@@ -42,6 +37,7 @@ class AuthManager extends Controller
         if (Auth::check()) {
             return redirect()->route('teacher.view');
         }
+
         return view('teacher.teacherauth');
     }
 
@@ -61,15 +57,13 @@ class AuthManager extends Controller
             'room_name' => $request->room_name,
         ]);
 
-        if (!$user) {
+        if (! $user) {
             return redirect()->back()->withInput()->with('error', 'Registration failed. Please try again.');
         }
 
         Auth::login($user);
         $request->session()->regenerate();
+
         return redirect()->route('teacher.view');
     }
-
-
-    
 }

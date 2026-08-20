@@ -2,12 +2,12 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
-use App\Models\Quiz;
 use App\Models\Question;
+use App\Models\Quiz;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Tests\TestCase;
 
 class QuizModelTest extends TestCase
 {
@@ -30,7 +30,7 @@ class QuizModelTest extends TestCase
 
     public function test_quiz_questions_relationship(): void
     {
-        $quiz = new Quiz();
+        $quiz = new Quiz;
         $relation = $quiz->questions();
 
         $this->assertInstanceOf(HasMany::class, $relation);
@@ -39,7 +39,7 @@ class QuizModelTest extends TestCase
 
     public function test_quiz_teacher_relationship(): void
     {
-        $quiz = new Quiz();
+        $quiz = new Quiz;
         $relation = $quiz->teacher();
 
         $this->assertInstanceOf(BelongsTo::class, $relation);

@@ -16,4 +16,3 @@ class Result extends Model
         return $this->hasMany(ResultDetail::class);
     }
 }
-

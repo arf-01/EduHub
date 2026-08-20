@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-          $middleware->trustHosts(at: ['eduhab.com', 'www.eduhab.com', 'localhost', '127.0.0.1']);
+        $middleware->trustHosts(at: ['eduhab.com', 'www.eduhab.com', 'localhost', '127.0.0.1']);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

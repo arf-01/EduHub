@@ -2,13 +2,12 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Quiz;
 use App\Models\Question;
+use App\Models\Quiz;
 use App\Models\Result;
-use App\Models\ResultDetail;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\TestCase;
 
 class LeaderboardTest extends TestCase
 {
@@ -106,7 +105,7 @@ class LeaderboardTest extends TestCase
             'score' => 5,
         ]);
 
-        $response = $this->actingAs($teacher)->get('/leaderboard/export/' . $quiz->id);
+        $response = $this->actingAs($teacher)->get('/leaderboard/export/'.$quiz->id);
 
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');

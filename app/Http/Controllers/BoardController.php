@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Result;
-use App\Models\Question;
-use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Quiz;
+use App\Models\Result;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
 
 class BoardController extends Controller
@@ -33,7 +31,7 @@ class BoardController extends Controller
         $highestScore = $results->max('score') ?? 0;
         $averageScore = $totalParticipants > 0 ? round($results->avg('score'), 1) : 0;
         $passRate = ($totalParticipants > 0 && $totalQuestions > 0)
-            ? round(($results->filter(fn($r) => ($r->score / $totalQuestions) >= 0.5)->count() / $totalParticipants) * 100, 1)
+            ? round(($results->filter(fn ($r) => ($r->score / $totalQuestions) >= 0.5)->count() / $totalParticipants) * 100, 1)
             : 0;
 
         return view('teacher.leaderboard', compact(
@@ -95,7 +93,7 @@ class BoardController extends Controller
         $highestScore = $results->max('score') ?? 0;
         $lowestScore = $totalParticipants > 0 ? $results->min('score') : 0;
         $passRate = ($totalParticipants > 0 && $totalQuestions > 0)
-            ? round(($results->filter(fn($r) => ($r->score / $totalQuestions) >= 0.5)->count() / $totalParticipants) * 100, 1)
+            ? round(($results->filter(fn ($r) => ($r->score / $totalQuestions) >= 0.5)->count() / $totalParticipants) * 100, 1)
             : 0;
 
         return view('teacher.quiz_performance', compact(
@@ -134,6 +132,7 @@ class BoardController extends Controller
 
         $totalQuestions = $quiz->questions->count();
         $pdf = Pdf::loadView('teacher.resultpdf', compact('quiz', 'results', 'totalQuestions'));
+
         return $pdf->download("quiz-{$quiz->id}-leaderboard.pdf");
     }
 

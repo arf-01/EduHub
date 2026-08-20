@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Quiz;
 use App\Models\Question;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use App\Models\Quiz;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\TestCase;
 
 class QuizScheduleTest extends TestCase
 {

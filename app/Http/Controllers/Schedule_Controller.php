@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Quiz;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 
-
-class Schedule_Controller extends Controller {
+class Schedule_Controller extends Controller
+{
     public function schedule(Request $request, $quiz_id)
     {
         $request->validate([
@@ -32,7 +31,7 @@ class Schedule_Controller extends Controller {
             $quiz->duration = $totalDuration;
             $quiz->save();
 
-            return redirect()->back()->with('success', 'Quiz scheduled for ' . $startDatetime->format('d M, Y H:i'));
+            return redirect()->back()->with('success', 'Quiz scheduled for '.$startDatetime->format('d M, Y H:i'));
         } else {
             $quiz->start_datetime = null;
             $quiz->save();
@@ -41,4 +40,3 @@ class Schedule_Controller extends Controller {
         }
     }
 }
-

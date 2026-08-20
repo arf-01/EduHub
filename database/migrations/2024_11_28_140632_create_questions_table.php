@@ -26,9 +26,9 @@ return new class extends Migration
 
             // Foreign key
             $table->foreign('quiz_id')
-                  ->references('id')
-                  ->on('quizzes')
-                  ->onDelete('cascade');
+                ->references('id')
+                ->on('quizzes')
+                ->onDelete('cascade');
         });
     }
 

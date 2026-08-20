@@ -27,9 +27,10 @@ class ResultDetail extends Model
 
     public function getIsCorrectAttribute()
     {
-        if (!$this->selected_option || !$this->question) {
+        if (! $this->selected_option || ! $this->question) {
             return false;
         }
-        return (int)$this->selected_option === (int)$this->question->right_option;
+
+        return (int) $this->selected_option === (int) $this->question->right_option;
     }
 }

@@ -12,17 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('results', function (Blueprint $table) {
-    $table->id();
-    $table->string('student_id'); // Treat student_id as a string (or integer if numeric only)
-    $table->unsignedBigInteger('quiz_id');
-    $table->float('score', 8, 2)->default(0);  // Float with 2 decimal places
-    $table->timestamps();
+            $table->id();
+            $table->string('student_id'); // Treat student_id as a string (or integer if numeric only)
+            $table->unsignedBigInteger('quiz_id');
+            $table->float('score', 8, 2)->default(0);  // Float with 2 decimal places
+            $table->timestamps();
 
-    // Only set foreign key for quiz_id
-    $table->foreign('quiz_id')->references('id')->on('quizzes')->onDelete('cascade');
-    $table->unique(['student_id', 'quiz_id']);
-});
-        
+            // Only set foreign key for quiz_id
+            $table->foreign('quiz_id')->references('id')->on('quizzes')->onDelete('cascade');
+            $table->unique(['student_id', 'quiz_id']);
+        });
+
     }
 
     /**

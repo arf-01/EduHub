@@ -2,16 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\Log;
-use App\Models\Quiz;
 use App\Models\Question;
-use App\Models\Result;
+use App\Models\Quiz;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
-
-
+use Illuminate\Http\Request;
 
 class QuizExamController extends Controller
 {
@@ -19,9 +13,8 @@ class QuizExamController extends Controller
     public function takeQuiz(Request $request, $quiz_id)
     {
         $studentId = session('student_id');
-       
 
-        if (!$studentId) {
+        if (! $studentId) {
             return redirect()->route('quiz.listStud')->with('error', 'Please enter the quiz room first.');
         }
 
@@ -40,25 +33,22 @@ class QuizExamController extends Controller
         }
 
         //  Prepare questions array for frontend
-     $questions = $quiz->questions->map(function ($q) {
-    return [
-        'id' =>$q->id,
-        'text' => $q->text,
-        'image' => $q->image
-            ? asset('storage/' . ltrim($q->image, '/'))
-            : null,
+        $questions = $quiz->questions->map(function ($q) {
+            return [
+                'id' => $q->id,
+                'text' => $q->text,
+                'image' => $q->image
+                    ? asset('storage/'.ltrim($q->image, '/'))
+                    : null,
 
-        'option1' => $q->option1,
-        'option2' => $q->option2,
-        'option3' => $q->option3,
-        'option4' => $q->option4,
-        'duration' => (int) $q->duration,
-        // 'right_option' removed here — do not send it
-    ];
-});
-
-
-
+                'option1' => $q->option1,
+                'option2' => $q->option2,
+                'option3' => $q->option3,
+                'option4' => $q->option4,
+                'duration' => (int) $q->duration,
+                // 'right_option' removed here — do not send it
+            ];
+        });
 
         return view('student.questions', [
             'quiz' => $quiz,
@@ -78,11 +68,11 @@ class QuizExamController extends Controller
         if ($totalDuration <= 0) {
             $totalDuration = $quiz->questions->count() * 60;
         }
-        
+
         $quiz->start_datetime = $current;
         $quiz->duration = $totalDuration;
         $quiz->save();
-        
+
         return redirect()->back()->with('success', 'Quiz started live!');
     }
 
@@ -90,7 +80,7 @@ class QuizExamController extends Controller
     public function endNow(Request $request, $id)
     {
         $quiz = Quiz::findOrFail($id);
-        
+
         // If it was already running, set start_datetime to past so now > end
         if ($quiz->start_datetime) {
             $durationSeconds = $quiz->duration ?: ($quiz->questions->count() * 60);

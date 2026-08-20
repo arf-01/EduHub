@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Quiz;
 use App\Models\Question;
+use App\Models\Quiz;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
 class QuestionStudioTest extends TestCase
 {
@@ -33,7 +33,7 @@ class QuestionStudioTest extends TestCase
                 1 => '42',
                 2 => '0',
                 3 => 'Compilation error',
-                4 => 'Runtime error'
+                4 => 'Runtime error',
             ],
             'correct_option' => 1,
             'duration' => 45,
@@ -76,7 +76,7 @@ class QuestionStudioTest extends TestCase
                 1 => 'Inheritance',
                 2 => 'Aggregation',
                 3 => 'Composition',
-                4 => 'Dependency'
+                4 => 'Dependency',
             ],
             'correct_option' => 3,
             'duration' => 60,
@@ -116,7 +116,7 @@ class QuestionStudioTest extends TestCase
                 1 => 'Alpha',
                 2 => 'Beta',
                 3 => 'Gamma',
-                4 => 'Delta'
+                4 => 'Delta',
             ],
             'correct_option' => 2,
             'duration' => 90,
@@ -134,7 +134,7 @@ class QuestionStudioTest extends TestCase
     {
         $owner = User::factory()->create();
         $otherUser = User::factory()->create();
-        
+
         $quiz = Quiz::create([
             'title' => 'Private Quiz',
             'userid' => $owner->id,
@@ -199,7 +199,7 @@ class QuestionStudioTest extends TestCase
     public function test_student_join_receives_correct_question_duration()
     {
         $teacher = User::factory()->create([
-            'room_name' => 'CS90'
+            'room_name' => 'CS90',
         ]);
 
         $quiz = Quiz::create([
@@ -220,7 +220,7 @@ class QuestionStudioTest extends TestCase
             'duration' => 90,
         ]);
 
-        $response = $this->postJson("/api/quiz/start", [
+        $response = $this->postJson('/api/quiz/start', [
             'quiz_id' => $quiz->id,
             'student_id' => 'STU999',
         ]);

@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\User;
 use App\Models\Quiz;
 use App\Models\Result;
 use App\Models\ResultDetail;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -29,7 +29,7 @@ class QuizApiController extends Controller
 
         $teacher = User::where('room_name', $roomName)->first();
 
-        if (!$teacher) {
+        if (! $teacher) {
             return response()->json(['error' => 'Room not found. Please verify the room name.'], 404);
         }
 
@@ -41,7 +41,7 @@ class QuizApiController extends Controller
             ->where(function ($q) use ($now) {
                 // Include: idle (no start), scheduled/live/recently-ended (within last 24 h)
                 $q->whereNull('start_datetime')
-                  ->orWhere('start_datetime', '>=', $now->copy()->subDay());
+                    ->orWhere('start_datetime', '>=', $now->copy()->subDay());
             })
             ->orderBy('created_at', 'desc')
             ->limit(20) // safety cap — prevents unbounded growth under load
@@ -58,7 +58,7 @@ class QuizApiController extends Controller
 
             $startTime = $quiz->start_datetime ? Carbon::parse($quiz->start_datetime) : null;
             // duration stores total quiz duration in SECONDS (sum of per-question durations).
-            $durationSeconds = max(60, (int)($quiz->duration ?: ($quiz->questions_count * 60)));
+            $durationSeconds = max(60, (int) ($quiz->duration ?: ($quiz->questions_count * 60)));
             $endTime = $startTime ? $startTime->copy()->addSeconds($durationSeconds) : null;
 
             // Determine accurate real-time status.
@@ -81,15 +81,15 @@ class QuizApiController extends Controller
 
             // server_time is returned once at the root level — omitted here to keep payload lean.
             return [
-                'id'             => $quiz->id,
-                'title'         => $quiz->title,
-                'status'         => $status,
+                'id' => $quiz->id,
+                'title' => $quiz->title,
+                'status' => $status,
                 'question_count' => $quiz->questions_count,
-                'duration'       => $durationSeconds,
+                'duration' => $durationSeconds,
                 'start_datetime' => $startTime ? $startTime->toIso8601String() : null,
-                'end_datetime'   => $endTime ? $endTime->toIso8601String() : null,
-                'score'          => $studentResult ? $studentResult->score : null,
-                'total'          => $quiz->questions_count,
+                'end_datetime' => $endTime ? $endTime->toIso8601String() : null,
+                'score' => $studentResult ? $studentResult->score : null,
+                'total' => $quiz->questions_count,
             ];
         });
 
@@ -122,11 +122,12 @@ class QuizApiController extends Controller
 
         if ($existingResult) {
             $quiz = Quiz::withCount('questions')->findOrFail($quizId);
+
             return response()->json([
                 'error' => 'You have already submitted this quiz.',
                 'score' => $existingResult->score,
                 'total' => $quiz->questions_count,
-                'status' => 'submitted'
+                'status' => 'submitted',
             ], 400);
         }
 
@@ -146,11 +147,11 @@ class QuizApiController extends Controller
 
         $now = Carbon::now();
         $startTime = $quiz->start_datetime ? Carbon::parse($quiz->start_datetime) : null;
-        $durationSeconds = max(60, (int)($quiz->duration ?: ($quiz->questions->count() * 60)));
+        $durationSeconds = max(60, (int) ($quiz->duration ?: ($quiz->questions->count() * 60)));
         $endTime = $startTime ? $startTime->copy()->addSeconds($durationSeconds) : null;
 
         // Verify if quiz is started and not ended
-        if (!$startTime) {
+        if (! $startTime) {
             return response()->json(['error' => 'This quiz has not been started by the teacher yet.'], 403);
         }
 
@@ -158,7 +159,7 @@ class QuizApiController extends Controller
             return response()->json([
                 'error' => 'This quiz is scheduled and has not started yet.',
                 'start_datetime' => $startTime->toIso8601String(),
-                'server_time' => $now->toIso8601String()
+                'server_time' => $now->toIso8601String(),
             ], 403);
         }
 
@@ -187,7 +188,6 @@ class QuizApiController extends Controller
         return $this->roomQuizzes($request);
     }
 
-
     /**
      * Submit quiz answers
      */
@@ -196,7 +196,7 @@ class QuizApiController extends Controller
         $request->validate([
             'quiz_id' => 'required|integer|exists:quizzes,id',
             'student_id' => 'required|string',
-            'answers' => 'present|array'
+            'answers' => 'present|array',
         ]);
 
         $quizId = $request->quiz_id;
@@ -231,7 +231,7 @@ class QuizApiController extends Controller
             return response()->json([
                 'message' => 'Quiz already submitted.',
                 'score' => $existingResult->score,
-                'total' => $quiz->questions_count
+                'total' => $quiz->questions_count,
             ], 200);
         }
 
@@ -261,7 +261,7 @@ class QuizApiController extends Controller
             $questionId = $answer['questionId'] ?? null;
             $selectedOptionIndex = $answer['selectedOption'] ?? null;
 
-            if (!$questionId || !$selectedOptionIndex) {
+            if (! $questionId || ! $selectedOptionIndex) {
                 continue;
             }
 
@@ -269,7 +269,7 @@ class QuizApiController extends Controller
 
             if ($question) {
 
-                if ((int)$selectedOptionIndex === (int)$question->right_option) {
+                if ((int) $selectedOptionIndex === (int) $question->right_option) {
                     $score++;
                 }
 
@@ -295,7 +295,7 @@ class QuizApiController extends Controller
             $result = Result::create([
                 'student_id' => $studentId,
                 'quiz_id' => $quizId,
-                'score' => $score
+                'score' => $score,
             ]);
 
             $resultCreateTime = (microtime(true) - $start) * 1000;
@@ -338,7 +338,7 @@ class QuizApiController extends Controller
             return response()->json([
                 'message' => 'Quiz submitted successfully!',
                 'score' => $score,
-                'total' => count($quiz->questions)
+                'total' => count($quiz->questions),
             ]);
 
         } catch (\Exception $e) {
@@ -346,7 +346,7 @@ class QuizApiController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'error' => 'Failed to save submission. Please try again.'
+                'error' => 'Failed to save submission. Please try again.',
             ], 500);
         }
     }

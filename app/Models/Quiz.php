@@ -2,9 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-
+use Illuminate\Database\Eloquent\Model;
 
 class Quiz extends Model
 {
@@ -21,14 +20,14 @@ class Quiz extends Model
      * Do NOT treat this value as minutes.
      */
     protected $fillable = ['title', 'description', 'start_datetime', 'duration', 'userid'];
+
     public function questions()
     {
         return $this->hasMany(Question::class);
     }
 
     public function teacher()
-{
-    return $this->belongsTo(User::class, 'userid');
-}
-
+    {
+        return $this->belongsTo(User::class, 'userid');
+    }
 }

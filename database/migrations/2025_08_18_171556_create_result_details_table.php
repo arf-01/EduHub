@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('question_id')->constrained()->onDelete('cascade');
 
             $table->integer('selected_option')->nullable(); // integer, null means skipped
-          
+
             $table->timestamps();
         });
     }

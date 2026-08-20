@@ -13,8 +13,7 @@ Route::post('/quiz/join', [\App\Http\Controllers\Api\QuizApiController::class, '
 Route::post('/quiz/start', [\App\Http\Controllers\Api\QuizApiController::class, 'start']);
 Route::post('/quiz/submit', [\App\Http\Controllers\Api\QuizApiController::class, 'submit']);
 
-
-//Testing the load 
+//Testing the load
 
 Route::get('/load-test', function () {
     usleep(1000000); // 1 second

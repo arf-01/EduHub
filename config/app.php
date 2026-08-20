@@ -67,7 +67,6 @@ return [
 
     'timezone' => 'Asia/Dhaka', // Replace with your local timezone
 
-
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

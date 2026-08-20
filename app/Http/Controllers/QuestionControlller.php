@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Http\Request;
 use App\Models\Question;
 use App\Models\Quiz;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class QuestionControlller extends Controller
 {
@@ -16,7 +16,7 @@ class QuestionControlller extends Controller
      */
     public function storeQuiz(Request $request)
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             return redirect()->route('login')->with('error', 'You need to be logged in to create a quiz.');
         }
 
@@ -24,7 +24,7 @@ class QuestionControlller extends Controller
             'quiz_title' => 'required|string|max:255',
         ]);
 
-        $quiz = new Quiz();
+        $quiz = new Quiz;
         $quiz->title = $request->quiz_title;
         $quiz->userid = Auth::id();
         $quiz->start_datetime = Carbon::now();
@@ -46,6 +46,7 @@ class QuestionControlller extends Controller
         }
 
         $quiz = $question->quiz;
+
         return view('teacher.question_update', compact('question', 'quiz'));
     }
 
@@ -80,18 +81,18 @@ class QuestionControlller extends Controller
         ]);
 
         $text = $request->filled('question_text') ? $request->question_text : $request->input('text');
-        
+
         $opt1 = $request->input('options.1') ?? $request->input('option1');
         $opt2 = $request->input('options.2') ?? $request->input('option2');
         $opt3 = $request->input('options.3') ?? $request->input('option3');
         $opt4 = $request->input('options.4') ?? $request->input('option4');
 
-        if (!$opt1 || !$opt2 || !$opt3 || !$opt4) {
+        if (! $opt1 || ! $opt2 || ! $opt3 || ! $opt4) {
             return back()->withErrors(['options' => 'All 4 options are required.'])->withInput();
         }
 
         $rightOption = $request->input('correct_option') ?? $request->input('right_option');
-        if (!$rightOption) {
+        if (! $rightOption) {
             return back()->withErrors(['correct_option' => 'Please select the correct option.'])->withInput();
         }
 
@@ -123,7 +124,7 @@ class QuestionControlller extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'Question updated successfully.',
-                'question' => $question
+                'question' => $question,
             ]);
         }
 
@@ -151,10 +152,10 @@ class QuestionControlller extends Controller
             return response()->json(['message' => 'Unauthorized action.'], 403);
         }
 
-        if (!$request->filled('question_text') && !$request->hasFile('question_image')) {
+        if (! $request->filled('question_text') && ! $request->hasFile('question_image')) {
             return response()->json([
                 'message' => 'Please provide question text or attach an image.',
-                'errors' => ['question_text' => ['Either question text or an image is required.']]
+                'errors' => ['question_text' => ['Either question text or an image is required.']],
             ], 422);
         }
 
@@ -176,7 +177,7 @@ class QuestionControlller extends Controller
         $question = $quiz->questions()->create($questionData);
 
         // Include full image URL for immediate client-side rendering
-        $question->image_url = $question->image ? asset('storage/' . $question->image) : null;
+        $question->image_url = $question->image ? asset('storage/'.$question->image) : null;
 
         return response()->json($question);
     }
@@ -188,7 +189,7 @@ class QuestionControlller extends Controller
     {
         $question = Question::with('quiz')->find($id);
 
-        if (!$question) {
+        if (! $question) {
             return response()->json(['message' => 'Question not found.'], 404);
         }
 

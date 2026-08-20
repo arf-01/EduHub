@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
 
 class AuthIntegrationTest extends TestCase
 {
@@ -21,9 +21,9 @@ class AuthIntegrationTest extends TestCase
     {
         $userData = [
             'name' => 'Professor Smith',
-            'email' => 'prof.smith.' . uniqid() . '@example.com',
+            'email' => 'prof.smith.'.uniqid().'@example.com',
             'password' => 'secret123',
-            'room_name' => 'ROOM_' . strtoupper(uniqid()),
+            'room_name' => 'ROOM_'.strtoupper(uniqid()),
         ];
 
         $response = $this->post(route('registration.post'), $userData);
@@ -73,7 +73,7 @@ class AuthIntegrationTest extends TestCase
 
     public function test_teacher_can_login_with_valid_credentials(): void
     {
-        $email = 'teacher.' . uniqid() . '@example.com';
+        $email = 'teacher.'.uniqid().'@example.com';
         $user = User::factory()->create([
             'email' => $email,
             'password' => Hash::make('password123'),
@@ -90,7 +90,7 @@ class AuthIntegrationTest extends TestCase
 
     public function test_teacher_login_fails_with_invalid_password(): void
     {
-        $email = 'teacher.' . uniqid() . '@example.com';
+        $email = 'teacher.'.uniqid().'@example.com';
         User::factory()->create([
             'email' => $email,
             'password' => Hash::make('password123'),

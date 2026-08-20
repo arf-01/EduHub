@@ -2,9 +2,9 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
 use App\Models\Question;
 use App\Models\ResultDetail;
+use Tests\TestCase;
 
 class ResultDetailTest extends TestCase
 {
