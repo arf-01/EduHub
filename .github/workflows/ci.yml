@@ -67,7 +67,7 @@ jobs:
         run: npm run build
 
       - name: Code Style Check (Laravel Pint)
-        run: vendor/bin/pint --test
+        run: php vendor/bin/pint --test
 
       - name: Copy Testing Environment
         run: php -r "file_exists('.env.testing') || copy('.env.example', '.env.testing');"
