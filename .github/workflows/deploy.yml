@@ -61,7 +61,7 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Install NPM Dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Compile Frontend Assets (Vite)
         run: npm run build
@@ -117,7 +117,7 @@ jobs:
             composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
             echo "==> Installing NPM dependencies..."
-            npm ci --no-audit || npm install --no-audit
+            npm ci --no-audit
 
             echo "==> Building frontend assets..."
             npm run build
