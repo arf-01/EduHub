@@ -4,12 +4,13 @@
     import { submitQuiz } from './api';
     import { parseContentWithCode, highlightCodeSyntax, formatInlineCode } from './CodeHighlighter';
 
-    let { quizId, studentId, isOnline, onComplete, onOfflineSubmit } = $props<{ 
+    let { quizId, studentId, isOnline, onComplete, onOfflineSubmit, onQuizEnded } = $props<{ 
         quizId: number, 
         studentId: string,
         isOnline: boolean,
         onComplete: (score: number, total: number) => void,
-        onOfflineSubmit: () => void
+        onOfflineSubmit: () => void,
+        onQuizEnded: (message: string) => void
     }>();
 
     let quiz = $state<Quiz | null>(null);
@@ -17,10 +18,10 @@
     let currentQuestionIndex = $state(0);
     let selectedOption = $state<number | null>(null);
     let remainingTime = $state(0);
+    let questionEndTime = $state(0);
     let isSubmitting = $state(false);
 
     let timerInterval: number;
-    let lastTickTime = Date.now();
 
     onMount(async () => {
         quiz = await db.quizzes.get(quizId) || null;
@@ -32,64 +33,59 @@
         }
 
         const savedState = await db.quizState.where('quizId').equals(quizId).first();
-        if (savedState && savedState.studentId === studentId && savedState.remainingTime > 0) {
-            const savedTimestamp = savedState.lastSaved ? new Date(savedState.lastSaved).getTime() : Date.now();
-            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - savedTimestamp) / 1000));
-
+        if (savedState && savedState.studentId === studentId && (savedState.remainingTime > 0 || savedState.questionEndTime)) {
+            const now = Date.now();
             let qIndex = savedState.currentQuestionId;
-            let rem = savedState.remainingTime - elapsedSeconds;
+            let targetEnd = savedState.questionEndTime || (savedState.lastSaved ? (new Date(savedState.lastSaved).getTime() + savedState.remainingTime * 1000) : (now + savedState.remainingTime * 1000));
 
-            while (rem <= 0 && qIndex < questions.length - 1) {
+            while (now >= targetEnd && qIndex < questions.length - 1) {
                 qIndex += 1;
-                const nextQDuration = questions[qIndex]?.duration || 60;
-                rem += nextQDuration;
+                const nextQDuration = Number(questions[qIndex]?.duration) || 60;
+                targetEnd += nextQDuration * 1000;
             }
 
-            if (rem <= 0 && qIndex >= questions.length - 1) {
+            if (now >= targetEnd && qIndex >= questions.length - 1) {
                 currentQuestionIndex = questions.length - 1;
                 remainingTime = 0;
+                questionEndTime = now;
                 await loadAnswerForCurrentQuestion();
                 await forceSubmit();
                 return;
             } else {
                 currentQuestionIndex = Math.min(qIndex, questions.length - 1);
-                remainingTime = Math.max(1, rem);
+                questionEndTime = targetEnd;
+                remainingTime = Math.max(1, Math.ceil((questionEndTime - now) / 1000));
             }
         } else {
             currentQuestionIndex = 0;
-            remainingTime = questions[0]?.duration || 60;
+            const duration = Number(questions[0]?.duration) || 60;
+            questionEndTime = Date.now() + duration * 1000;
+            remainingTime = duration;
         }
 
         await loadAnswerForCurrentQuestion();
         await saveState();
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', handleVisibilityChange);
 
-        lastTickTime = Date.now();
         startTimer();
     });
 
     onDestroy(() => {
         clearInterval(timerInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleVisibilityChange);
     });
 
     function handleVisibilityChange() {
-        if (document.visibilityState === 'visible') {
-            const now = Date.now();
-            const elapsed = Math.max(0, Math.floor((now - lastTickTime) / 1000));
-            lastTickTime = now;
+        if (!questionEndTime) return;
+        const now = Date.now();
+        remainingTime = Math.max(0, Math.ceil((questionEndTime - now) / 1000));
+        saveState();
 
-            if (elapsed > 0) {
-                remainingTime = Math.max(0, remainingTime - elapsed);
-                if (remainingTime <= 0) {
-                    handleTimeExpiry();
-                } else {
-                    saveState();
-                }
-            }
-        } else {
-            lastTickTime = Date.now();
+        if (remainingTime <= 0) {
+            handleTimeExpiry();
         }
     }
 
@@ -97,16 +93,11 @@
         clearInterval(timerInterval);
         timerInterval = window.setInterval(() => {
             const now = Date.now();
-            const elapsed = Math.max(0, Math.floor((now - lastTickTime) / 1000));
-            lastTickTime = now;
+            remainingTime = Math.max(0, Math.ceil((questionEndTime - now) / 1000));
+            saveState();
 
-            if (elapsed > 0) {
-                remainingTime = Math.max(0, remainingTime - elapsed);
-                saveState();
-
-                if (remainingTime <= 0) {
-                    handleTimeExpiry();
-                }
+            if (remainingTime <= 0) {
+                handleTimeExpiry();
             }
         }, 1000);
     }
@@ -125,6 +116,7 @@
             quizId,
             currentQuestionId: currentQuestionIndex,
             remainingTime,
+            questionEndTime,
             lastSaved: new Date().toISOString()
         };
 
@@ -160,8 +152,9 @@
         if (currentQuestionIndex < questions.length - 1) {
             selectedOption = null;
             currentQuestionIndex += 1;
-            remainingTime = questions[currentQuestionIndex]?.duration || 60;
-            lastTickTime = Date.now();
+            const dur = Number(questions[currentQuestionIndex]?.duration) || 60;
+            questionEndTime = Date.now() + dur * 1000;
+            remainingTime = dur;
             await loadAnswerForCurrentQuestion();
             await saveState();
         }
@@ -187,9 +180,19 @@
                     const response = await submitQuiz(quizId, studentId, payloadAnswers);
                     await db.quizState.where('quizId').equals(quizId).delete();
                     await db.answers.clear();
+                    await db.questions.where('quizId').equals(quizId).delete();
+                    await db.quizzes.delete(quizId);
                     onComplete(response.score, response.total);
                     submittedOnline = true;
                 } catch (netError: any) {
+                    if (netError?.quizEnded) {
+                        await db.quizState.where('quizId').equals(quizId).delete();
+                        await db.answers.clear();
+                        await db.questions.where('quizId').equals(quizId).delete();
+                        await db.quizzes.delete(quizId);
+                        onQuizEnded(netError.message || 'This quiz has already ended. Submissions are no longer accepted.');
+                        return;
+                    }
                     console.warn("Online submission failed. Queueing offline...", netError);
                 }
             }

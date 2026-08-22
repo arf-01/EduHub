@@ -17,19 +17,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
-                    registration.onupdatefound = () => {
-                        const installingWorker = registration.installing;
-                        if (installingWorker) {
-                            installingWorker.onstatechange = () => {
-                                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    console.log('New content available; reloading.');
-                                    window.location.reload();
-                                }
-                            };
-                        }
-                    };
-                }).catch(err => {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
                     console.warn('SW registration failed:', err);
                 });
             });

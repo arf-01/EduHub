@@ -81,14 +81,9 @@ class QuizExamController extends Controller
     {
         $quiz = Quiz::findOrFail($id);
 
-        // If it was already running, set start_datetime to past so now > end
-        if ($quiz->start_datetime) {
-            $durationSeconds = $quiz->duration ?: ($quiz->questions->count() * 60);
-            $quiz->start_datetime = Carbon::now()->subSeconds($durationSeconds + 10);
-        } else {
-            $quiz->start_datetime = Carbon::now()->subMinutes(60);
-            $quiz->duration = 60;
-        }
+        // Set start_datetime into the past so now > end + buffer
+        $durationSeconds = $quiz->duration ?: ($quiz->questions->count() * 60);
+        $quiz->start_datetime = Carbon::now()->subSeconds($durationSeconds + 120);
         $quiz->save();
 
         return redirect()->back()->with('success', 'Quiz ended successfully!');

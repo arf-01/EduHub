@@ -43,7 +43,7 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--edu-bg);
   color: var(--edu-text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 

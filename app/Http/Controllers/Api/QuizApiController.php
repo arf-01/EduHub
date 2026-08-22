@@ -247,6 +247,35 @@ class QuizApiController extends Controller
             'time_ms' => round($quizQuestionsTime, 2),
         ]);
 
+        $now = Carbon::now();
+        $startTime = $quiz->start_datetime ? Carbon::parse($quiz->start_datetime) : null;
+        $durationSeconds = max(60, (int) ($quiz->duration ?: ($quiz->questions->count() * 60)));
+        $endTime = $startTime ? $startTime->copy()->addSeconds($durationSeconds) : null;
+
+        // Verify if quiz is started and not ended
+        if (! $startTime) {
+            return response()->json([
+                'error' => 'This quiz has not been started by the teacher yet.',
+                'status' => 'idle',
+            ], 403);
+        }
+
+        if ($now->lt($startTime)) {
+            return response()->json([
+                'error' => 'This quiz is scheduled and has not started yet.',
+                'status' => 'scheduled',
+            ], 403);
+        }
+
+        // Allow a 30-second buffer for network jitter on live submissions
+        if ($endTime && $now->gt($endTime->copy()->addSeconds(30))) {
+            return response()->json([
+                'error' => 'This quiz has already ended. Submissions are no longer accepted.',
+                'status' => 'ended',
+                'quiz_ended' => true,
+            ], 403);
+        }
+
         // Grade submission
         $score = 0;
         $correctAnswers = [];
