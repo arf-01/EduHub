@@ -26,11 +26,12 @@ export default defineConfig({
             injectRegister: 'script',
             manifest: false,
             workbox: {
-                globPatterns: ['**/*.{js,css,ico,png,svg,jpg,jpeg,webp,ttf,woff,woff2}'],
+                globPatterns: ['build/**/*.{js,css,ico,png,svg,webp,woff,woff2}', 'favicon.ico', 'manifest.json', 'images/**/*.{png,jpg,jpeg,svg,webp}'],
+                globIgnores: ['storage/**/*', 'vendor/**/*', '**/node_modules/**/*'],
                 // Precache the student app shell
-                additionalManifestEntries: [{ url: '/student-app', revision: 'v2' }],
+                additionalManifestEntries: [{ url: '/student-app', revision: 'v3' }],
                 navigateFallback: '/student-app',
-                navigateFallbackAllowlist: [/^\/student-app/],
+                navigateFallbackAllowlist: [/^\/student-app/, /^\/quiz-listStud/, /^\/enter-room/],
                 clientsClaim: true,
                 skipWaiting: true,
                 cleanupOutdatedCaches: true,
@@ -48,7 +49,19 @@ export default defineConfig({
                             },
                         },
                     },
-                    // 2. Google Fonts Stylesheets
+                    // 2. Static Images & Assets
+                    {
+                        urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'static-images',
+                            expiration: {
+                                maxEntries: 60,
+                                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+                            },
+                        },
+                    },
+                    // 3. Google Fonts Stylesheets
                     {
                         urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
                         handler: 'StaleWhileRevalidate',
@@ -60,7 +73,7 @@ export default defineConfig({
                             },
                         },
                     },
-                    // 3. Google Fonts Webfont files (woff2, etc.)
+                    // 4. Google Fonts Webfont files (woff2, etc.)
                     {
                         urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
                         handler: 'CacheFirst',
