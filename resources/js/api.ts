@@ -9,9 +9,23 @@ const apiClient = axios.create({
     }
 });
 
-// Since this is Laravel, we also need to include the CSRF token if not using Sanctum token based auth.
-// Wait, the API routes /api/quiz/join are stateless, but if we have CORS or CSRF issues, we might need it.
-// Assuming it's a standard API endpoint.
+// Fast real-connectivity verification to eliminate mobile navigator.onLine false positives
+export const checkRealOnlineStatus = async (): Promise<boolean> => {
+    if (!navigator.onLine) return false;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const response = await fetch('/api/ping?_t=' + Date.now(), {
+            method: 'HEAD',
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch {
+        return false;
+    }
+};
 
 export interface RoomQuizItem {
     id: number;
@@ -62,6 +76,22 @@ export const joinQuiz = async (roomName: string, studentId: string) => {
     return getRoomQuizzes(roomName, studentId);
 };
 
+export class QuizApiError extends Error {
+    statusCode?: number;
+    quizEnded: boolean;
+    status?: string;
+    responseData?: any;
+
+    constructor(message: string, statusCode?: number, quizEnded: boolean = false, status?: string, responseData?: any) {
+        super(message);
+        this.name = 'QuizApiError';
+        this.statusCode = statusCode;
+        this.quizEnded = quizEnded;
+        this.status = status;
+        this.responseData = responseData;
+    }
+}
+
 export const submitQuiz = async (quizId: number, studentId: string, answers: any[]) => {
     try {
         const response = await apiClient.post('/api/quiz/submit', {
@@ -71,6 +101,15 @@ export const submitQuiz = async (quizId: number, studentId: string, answers: any
         });
         return response.data;
     } catch (error: any) {
-        throw new Error(error.response?.data?.error || 'Failed to submit quiz.');
+        const data = error.response?.data;
+        const statusCode = error.response?.status;
+        const isEnded = Boolean(
+            data?.quiz_ended || 
+            data?.status === 'ended' || 
+            (typeof data?.error === 'string' && data.error.toLowerCase().includes('ended'))
+        );
+        const msg = data?.error || data?.message || error.message || 'Failed to submit quiz.';
+        throw new QuizApiError(msg, statusCode, isEnded, data?.status, data);
     }
 };
+

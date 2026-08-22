@@ -1,10 +1,10 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import Login from './Login.svelte';
     import RoomLobby from './RoomLobby.svelte';
     import Quiz from './Quiz.svelte';
     import { db } from './db';
-    import { submitQuiz, startQuiz } from './api';
+    import { submitQuiz, startQuiz, checkRealOnlineStatus } from './api';
 
     let loading = $state(true);
     let initError = $state('');
@@ -17,6 +17,9 @@
     let quizScore = $state<number | null>(null);
     let quizTotal = $state<number | null>(null);
     let hasPendingSubmission = $state(false);
+    let quizEndedNotice = $state<{ message: string } | null>(null);
+
+    let networkCheckInterval: number;
 
     function shuffleArray<T>(array: T[]): T[] {
         const arr = [...array];
@@ -27,11 +30,44 @@
         return arr;
     }
 
+    async function clearQuizLocalData(quizId?: number | null) {
+        try {
+            if (quizId) {
+                await db.pendingSubmissions.where('quizId').equals(quizId).delete();
+                await db.quizState.where('quizId').equals(quizId).delete();
+                await db.questions.where('quizId').equals(quizId).delete();
+                await db.quizzes.delete(quizId);
+            } else {
+                await db.pendingSubmissions.clear();
+                await db.quizState.clear();
+                await db.questions.clear();
+                await db.quizzes.clear();
+            }
+            await db.answers.clear();
+        } catch (e) {
+            console.warn('Failed to clear quiz data from IndexedDB:', e);
+        }
+    }
+
     onMount(async () => {
         try {
             // Setup network listeners
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
+
+            // Run initial real connectivity check
+            isOnline = await checkRealOnlineStatus();
+
+            // Periodic reachability heartbeat (every 10 seconds)
+            networkCheckInterval = window.setInterval(async () => {
+                const reallyOnline = await checkRealOnlineStatus();
+                if (reallyOnline !== isOnline) {
+                    isOnline = reallyOnline;
+                    if (isOnline) {
+                        await syncPendingSubmissions();
+                    }
+                }
+            }, 10000);
 
             // Check if there is an unsynced submission
             const pending = await db.pendingSubmissions.where('synced').equals(0).toArray();
@@ -54,8 +90,10 @@
                 }
             }
 
-            // Initial sync attempt
-            await syncPendingSubmissions();
+            // Initial sync attempt if online
+            if (isOnline) {
+                await syncPendingSubmissions();
+            }
         } catch (err: any) {
             console.error("Initialization error:", err);
             initError = err.message || "Failed to initialize database.";
@@ -64,9 +102,18 @@
         }
     });
 
+    onDestroy(() => {
+        clearInterval(networkCheckInterval);
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+    });
+
     async function handleOnline() {
-        isOnline = true;
-        await syncPendingSubmissions();
+        const reallyOnline = await checkRealOnlineStatus();
+        isOnline = reallyOnline;
+        if (reallyOnline) {
+            await syncPendingSubmissions();
+        }
     }
 
     function handleOffline() {
@@ -80,8 +127,7 @@
                 const response = await submitQuiz(submission.quizId, submission.studentId, submission.answers);
                 
                 await db.pendingSubmissions.update(submission.id!, { synced: 1 });
-                await db.answers.clear();
-                await db.questions.where('quizId').equals(submission.quizId).delete();
+                await clearQuizLocalData(submission.quizId);
                 
                 isOnline = true;
                 
@@ -89,10 +135,32 @@
                     quizScore = response.score;
                     quizTotal = response.total;
                     hasPendingSubmission = false;
+                    quizEndedNotice = null;
                 }
             } catch (error: any) {
-                isOnline = false;
-                console.warn('Sync waiting for connection.');
+                const isEnded = Boolean(
+                    error?.quizEnded || 
+                    error?.response?.data?.quiz_ended || 
+                    error?.status === 'ended' || 
+                    (typeof error?.message === 'string' && error.message.toLowerCase().includes('ended'))
+                );
+
+                if (isEnded) {
+                    // Quiz has ended on server - mark as synced, clean local DB completely, and notify student
+                    await db.pendingSubmissions.update(submission.id!, { synced: 1 });
+                    await clearQuizLocalData(submission.quizId);
+
+                    if (submission.quizId === activeQuizId && submission.studentId === studentId) {
+                        hasPendingSubmission = false;
+                        activeQuizId = null;
+                        quizEndedNotice = {
+                            message: error.message || 'This quiz has already ended. Submissions are no longer being accepted.'
+                        };
+                    }
+                } else {
+                    isOnline = false;
+                    console.warn('Sync waiting for connection.');
+                }
             }
         }
     }
@@ -104,6 +172,7 @@
         quizScore = null;
         quizTotal = null;
         hasPendingSubmission = false;
+        quizEndedNotice = null;
     }
 
     async function handleStartQuiz(quizId: number) {
@@ -141,24 +210,18 @@
         quizScore = null;
         quizTotal = null;
         hasPendingSubmission = false;
+        quizEndedNotice = null;
     }
 
     async function handleLeaveRoom() {
-        try {
-            await db.quizState.clear();
-            await db.answers.clear();
-            if (activeQuizId) {
-                await db.questions.where('quizId').equals(activeQuizId).delete();
-            }
-        } catch (e) {
-            console.warn('IndexedDB cleanup failed:', e);
-        }
+        await clearQuizLocalData(activeQuizId);
         currentRoomName = null;
         studentId = null;
         activeQuizId = null;
         quizScore = null;
         quizTotal = null;
         hasPendingSubmission = false;
+        quizEndedNotice = null;
     }
 
     function handleOfflineSubmit() {
@@ -168,21 +231,24 @@
     function handleComplete(score: number, total: number) {
         quizScore = score;
         quizTotal = total;
+        quizEndedNotice = null;
+    }
+
+    function handleQuizEnded(message: string) {
+        hasPendingSubmission = false;
+        activeQuizId = null;
+        quizEndedNotice = { message };
     }
 
     async function resetApp() {
-        try {
-            await db.quizState.clear();
-            await db.answers.clear();
-        } catch (e) {
-            console.error("Error clearing local database state:", e);
-        }
+        await clearQuizLocalData();
         currentRoomName = null;
         activeQuizId = null;
         studentId = null;
         quizScore = null;
         quizTotal = null;
         hasPendingSubmission = false;
+        quizEndedNotice = null;
     }
 </script>
 
@@ -255,6 +321,37 @@
                 <p class="text-rose-400 text-xs">{initError}</p>
                 <button type="button" onclick={() => window.location.reload()} class="edu-btn-primary w-full text-sm">Retry</button>
             </div>
+        {:else if quizEndedNotice}
+            <!-- Quiz Ended Rejection Card -->
+            <div class="edu-card p-8 sm:p-10 w-full max-w-md text-center shadow-2xl space-y-6 edu-animate-scale-in border-rose-500/30">
+                <div class="w-16 h-16 bg-rose-500/15 text-rose-400 rounded-2xl border border-rose-500/30 flex items-center justify-center mx-auto text-3xl">
+                    🏁
+                </div>
+                <div class="space-y-2">
+                    <span class="edu-badge bg-rose-500/15 text-rose-300 border border-rose-500/30 text-xs">
+                        Submissions Closed
+                    </span>
+                    <h2 class="text-2xl font-extrabold text-white">Quiz Finished</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        {quizEndedNotice.message || 'This quiz has already ended. Submissions are no longer being accepted by the teacher.'}
+                    </p>
+                </div>
+                
+                <div class="pt-2">
+                    <button 
+                        type="button" 
+                        onclick={async () => {
+                            await clearQuizLocalData();
+                            quizEndedNotice = null;
+                            activeQuizId = null;
+                            hasPendingSubmission = false;
+                        }} 
+                        class="edu-btn-primary w-full text-sm py-2.5 justify-center shadow-lg shadow-indigo-600/30"
+                    >
+                        ← Back to Room Lobby
+                    </button>
+                </div>
+            </div>
         {:else if hasPendingSubmission}
             <!-- Pending Sync View -->
             <div class="edu-card p-8 sm:p-10 w-full max-w-md text-center shadow-2xl space-y-5 edu-animate-scale-in">
@@ -319,7 +416,7 @@
                     {#if currentRoomName && studentId}
                         <button 
                             type="button"
-                            onclick={() => { quizScore = null; quizTotal = null; activeQuizId = null; }}
+                            onclick={async () => { await clearQuizLocalData(); quizScore = null; quizTotal = null; activeQuizId = null; }}
                             class="edu-btn-ghost w-full py-2.5 text-xs font-semibold justify-center"
                         >
                             ← Back to Room Lobby
@@ -337,7 +434,14 @@
             </div>
         {:else if activeQuizId && studentId}
             <!-- Quiz Taking View -->
-            <Quiz quizId={activeQuizId} studentId={studentId} isOnline={isOnline} onComplete={handleComplete} onOfflineSubmit={handleOfflineSubmit} />
+            <Quiz 
+                quizId={activeQuizId} 
+                studentId={studentId} 
+                isOnline={isOnline} 
+                onComplete={handleComplete} 
+                onOfflineSubmit={handleOfflineSubmit}
+                onQuizEnded={handleQuizEnded}
+            />
         {:else if currentRoomName && studentId}
             <!-- Room Lobby View -->
             <RoomLobby 
@@ -353,3 +457,4 @@
         {/if}
     </div>
 </main>
+

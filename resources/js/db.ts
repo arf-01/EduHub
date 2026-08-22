@@ -34,6 +34,7 @@ export interface QuizState {
     quizId: number;
     currentQuestionId: number;
     remainingTime: number;
+    questionEndTime?: number; // Absolute epoch timestamp (ms) for exact wall-clock deadline
     lastSaved: string; // ISO timestamp
 }
 

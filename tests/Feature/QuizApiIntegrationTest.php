@@ -241,4 +241,121 @@ class QuizApiIntegrationTest extends TestCase
             'score' => 1,
         ]);
     }
+
+    public function test_quiz_submit_rejected_when_quiz_has_ended(): void
+    {
+        $teacher = User::factory()->create();
+        $quiz = Quiz::factory()->create([
+            'userid' => $teacher->id,
+            'start_datetime' => Carbon::now()->subMinutes(30),
+            'duration' => 300, // 5 minutes quiz that started 30 mins ago
+        ]);
+
+        $q = Question::factory()->create(['quiz_id' => $quiz->id, 'right_option' => '1']);
+        $studentId = 'STU700';
+
+        $response = $this->postJson('/api/quiz/submit', [
+            'quiz_id' => $quiz->id,
+            'student_id' => $studentId,
+            'answers' => [
+                ['questionId' => $q->id, 'selectedOption' => 1],
+            ],
+        ]);
+
+        $response->assertStatus(403);
+        $response->assertJson([
+            'error' => 'This quiz has already ended. Submissions are no longer accepted.',
+            'status' => 'ended',
+            'quiz_ended' => true,
+        ]);
+
+        $this->assertDatabaseMissing('results', [
+            'quiz_id' => $quiz->id,
+            'student_id' => $studentId,
+        ]);
+    }
+
+    public function test_quiz_submit_rejected_when_quiz_not_started(): void
+    {
+        $teacher = User::factory()->create();
+        $quiz = Quiz::factory()->unscheduled()->create([
+            'userid' => $teacher->id,
+        ]);
+
+        $q = Question::factory()->create(['quiz_id' => $quiz->id, 'right_option' => '1']);
+        $studentId = 'STU800';
+
+        $response = $this->postJson('/api/quiz/submit', [
+            'quiz_id' => $quiz->id,
+            'student_id' => $studentId,
+            'answers' => [
+                ['questionId' => $q->id, 'selectedOption' => 1],
+            ],
+        ]);
+
+        $response->assertStatus(403);
+        $response->assertJson([
+            'error' => 'This quiz has not been started by the teacher yet.',
+            'status' => 'idle',
+        ]);
+    }
+
+    public function test_teacher_can_end_quiz_and_restart_quiz_live(): void
+    {
+        $teacher = User::factory()->create();
+        $this->actingAs($teacher);
+
+        $quiz = Quiz::factory()->create([
+            'userid' => $teacher->id,
+            'start_datetime' => Carbon::now(),
+            'duration' => 300,
+        ]);
+
+        $q = Question::factory()->create([
+            'quiz_id' => $quiz->id,
+            'right_option' => '2',
+            'duration' => 60,
+        ]);
+
+        // 1. Teacher ends the quiz
+        $endResponse = $this->post(route('quiz.endnow', $quiz->id));
+        $endResponse->assertRedirect();
+
+        $quiz->refresh();
+        $this->assertTrue(Carbon::now()->gt(Carbon::parse($quiz->start_datetime)->addSeconds($quiz->duration)));
+
+        // 2. Student submission while ended is rejected
+        $studentId = 'STU900';
+        $submitResponse1 = $this->postJson('/api/quiz/submit', [
+            'quiz_id' => $quiz->id,
+            'student_id' => $studentId,
+            'answers' => [
+                ['questionId' => $q->id, 'selectedOption' => 2],
+            ],
+        ]);
+        $submitResponse1->assertStatus(403);
+        $submitResponse1->assertJson(['quiz_ended' => true]);
+
+        // 3. Teacher restarts the quiz live
+        $startResponse = $this->post(route('quiz.startnow', $quiz->id));
+        $startResponse->assertRedirect();
+
+        $quiz->refresh();
+        $this->assertTrue(Carbon::now()->lte(Carbon::parse($quiz->start_datetime)->addSeconds($quiz->duration)));
+
+        // 4. Student can now submit successfully
+        $submitResponse2 = $this->postJson('/api/quiz/submit', [
+            'quiz_id' => $quiz->id,
+            'student_id' => $studentId,
+            'answers' => [
+                ['questionId' => $q->id, 'selectedOption' => 2],
+            ],
+        ]);
+        $submitResponse2->assertStatus(200);
+        $submitResponse2->assertJson([
+            'message' => 'Quiz submitted successfully!',
+            'score' => 1,
+            'total' => 1,
+        ]);
+    }
 }
