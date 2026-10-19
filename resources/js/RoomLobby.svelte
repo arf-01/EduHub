@@ -66,19 +66,15 @@
                 const safeToClean = staleQuizIds.filter(id => !unsyncedQuizIds.has(id));
 
                 if (safeToClean.length > 0) {
-                    const staleSessions = await db.quizSessions
+                    const staleActive = await db.activeQuizzes
                         .where('quizId')
                         .anyOf(safeToClean)
                         .toArray();
-                    
-                    for (const session of staleSessions) {
-                        const hasPending = unsyncedPending.some((submission) => submission.sessionId === session.sessionId);
+
+                    for (const aq of staleActive) {
+                        const hasPending = unsyncedPending.some(s => s.sessionId === aq.sessionId);
                         if (!hasPending) {
-                            await db.quizStates.where('sessionId').equals(session.sessionId).delete();
-                            await db.sessionAnswers.where('sessionId').equals(session.sessionId).delete();
-                            await db.sessionQuestions.where('sessionId').equals(session.sessionId).delete();
-                            await db.sessionQuizzes.delete(session.sessionId);
-                            await db.quizSessions.delete(session.sessionId);
+                            await db.activeQuizzes.delete(aq.sessionId);
                         }
                     }
                 }
@@ -98,7 +94,7 @@
 
         try {
             if (!isOnline && !navigator.onLine) {
-                const count = await db.sessionQuestions.where('quizId').equals(quizId).count();
+                const count = await db.activeQuizzes.where('quizId').equals(quizId).count();
                 if (count === 0) {
                     error = 'You must be online when starting a quiz for the first time.';
                     startingQuizId = null;

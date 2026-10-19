@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Api\QuizApiController;
 use App\Models\Question;
 use App\Models\Quiz;
 use Carbon\Carbon;
@@ -83,7 +84,8 @@ class QuizExamController extends Controller
 
         // Set start_datetime into the past so now > end + buffer
         $durationSeconds = $quiz->duration ?: ($quiz->questions->count() * 60);
-        $quiz->start_datetime = Carbon::now()->subSeconds($durationSeconds + 120);
+        $buffer = QuizApiController::SUBMISSION_GRACE_SECONDS + 60;
+        $quiz->start_datetime = Carbon::now()->subSeconds($durationSeconds + $buffer);
         $quiz->save();
 
         return redirect()->back()->with('success', 'Quiz ended successfully!');

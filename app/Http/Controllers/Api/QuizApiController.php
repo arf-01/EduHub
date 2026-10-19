@@ -18,6 +18,11 @@ use Illuminate\Support\Str;
 class QuizApiController extends Controller
 {
     /**
+     * Extra grace period (in seconds) allowed after quiz expiration for offline submissions to sync.
+     */
+    public const SUBMISSION_GRACE_SECONDS = 300; // 5 minutes
+
+    /**
      * Get all quizzes for a room with real-time status (live, scheduled, idle, ended, submitted)
      */
     public function roomQuizzes(Request $request)
@@ -171,7 +176,9 @@ class QuizApiController extends Controller
             return response()->json(['error' => 'This quiz has already ended.'], 403);
         }
 
-        $attempt = DB::transaction(function () use ($studentId, $quizId, $now, $durationSeconds) {
+        $expiresAt = $endTime ?: $now->copy()->addSeconds($durationSeconds);
+
+        $attempt = DB::transaction(function () use ($studentId, $quizId, $now, $expiresAt) {
             $activeKey = "{$studentId}:{$quizId}";
             $activeAttempt = QuizAttempt::where('active_key', $activeKey)
                 ->lockForUpdate()
@@ -195,7 +202,7 @@ class QuizApiController extends Controller
                 'active_key' => $activeKey,
                 'attempt_token' => Str::random(64),
                 'started_at' => $now,
-                'expires_at' => $now->copy()->addSeconds($durationSeconds),
+                'expires_at' => $expiresAt,
                 'last_seen_at' => $now,
             ]);
         });
@@ -218,6 +225,7 @@ class QuizApiController extends Controller
                 'title' => $quiz->title,
                 'duration' => $durationSeconds,
                 'start_datetime' => $startTime->toIso8601String(),
+                'end_datetime' => $expiresAt->toIso8601String(),
             ],
             'questions' => $quiz->questions,
         ]);
@@ -249,10 +257,12 @@ class QuizApiController extends Controller
         $studentId = $request->student_id;
         $answers = $request->answers;
         $submissionId = $request->submission_id;
+
         $canonicalAnswers = $answers;
         usort($canonicalAnswers, function (array $left, array $right): int {
             return ((int) ($left['questionId'] ?? 0)) <=> ((int) ($right['questionId'] ?? 0));
         });
+
         $payloadHash = hash('sha256', json_encode([
             'quiz_id' => $quizId,
             'student_id' => $studentId,
@@ -299,7 +309,10 @@ class QuizApiController extends Controller
             ], 409);
         }
 
-        if ($attempt->expires_at->isPast()) {
+        $now = Carbon::now();
+        $graceDeadline = $attempt->expires_at->copy()->addSeconds(self::SUBMISSION_GRACE_SECONDS);
+
+        if ($now->gt($graceDeadline)) {
             $attempt->update([
                 'status' => 'expired',
                 'active_key' => null,
@@ -376,8 +389,9 @@ class QuizApiController extends Controller
             ], 403);
         }
 
-        // Allow a 30-second buffer for network jitter on live submissions
-        if ($endTime && $now->gt($endTime->copy()->addSeconds(30))) {
+        // Allow grace period buffer for offline sync
+        $quizGraceDeadline = $endTime ? $endTime->copy()->addSeconds(self::SUBMISSION_GRACE_SECONDS) : null;
+        if ($quizGraceDeadline && $now->gt($quizGraceDeadline)) {
             return response()->json([
                 'error' => 'This quiz has already ended. Submissions are no longer accepted.',
                 'status' => 'ended',

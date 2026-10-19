@@ -25,7 +25,7 @@
         <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border mb-6 text-xs font-semibold"
              style="background:rgba(99,102,241,0.1); border-color:rgba(99,102,241,0.3); color:#a5b4fc;">
             <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block edu-animate-live"></span>
-            Online Quiz Platform · Real-Time Results
+            Online Quiz Platform
         </div>
 
         <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white leading-tight mb-5">
@@ -36,7 +36,7 @@
         </h1>
 
         <p class="text-base sm:text-lg max-w-2xl mx-auto mb-10" style="color:var(--edu-text2);">
-            Join EduHub — a modern quiz platform with real-time results, room-based access, and advanced analytics. Whether you're a teacher or student, we've got you covered.
+            Join EduHub — a modern quiz platform with room-based access and advanced analytics. Whether you're a teacher or student, we've got you covered.
         </p>
 
         {{-- CTA buttons --}}
@@ -66,7 +66,7 @@
 
         {{-- Feature chips --}}
         <div class="flex flex-wrap justify-center gap-3 mt-10">
-            @foreach(['⚡ Real-Time Results', '🏠 Room-Based Access', '📊 Analytics', '🛡️ Violation Detection', '📱 Works Offline'] as $f)
+            @foreach(['🏠 Room-Based Access', '📊 Analytics', '🛡️ Violation Detection', '📱 Works Offline'] as $f)
                 <span class="edu-badge border py-1.5 px-3"
                       style="background:rgba(255,255,255,0.04); border-color:var(--edu-border2); color:var(--edu-text2); font-size:.75rem;">
                     {{ $f }}

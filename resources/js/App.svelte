@@ -3,14 +3,14 @@
     import Login from './Login.svelte';
     import RoomLobby from './RoomLobby.svelte';
     import Quiz from './Quiz.svelte';
-    import { cleanupAbandonedSessions, clearSessionLocalData, createSessionId, db, getTabId } from './db';
+    import { cleanupAbandonedSessions, clearActiveQuiz, createSessionId, db, saveActiveSessionId, loadActiveSessionId } from './db';
     import { submitQuiz, startQuiz, checkRealOnlineStatus } from './api';
 
     // Show the room form immediately; recovery and connectivity checks run in the background.
     let loading = $state(false);
     let initError = $state('');
     let isOnline = $state(navigator.onLine);
-    
+
     // State management
     let currentRoomName = $state<string | null>(null);
     let studentId = $state<string | null>(null);
@@ -24,7 +24,6 @@
     let quizEndedNotice = $state<{ message: string } | null>(null);
 
     let networkCheckInterval: number;
-    const tabId = getTabId();
 
     function shuffleArray<T>(array: T[]): T[] {
         const arr = [...array];
@@ -38,11 +37,11 @@
     async function clearQuizLocalData(sessionId?: string | null, removePending = true) {
         try {
             if (sessionId) {
-                await clearSessionLocalData(sessionId, removePending);
+                await clearActiveQuiz(sessionId, removePending);
             } else {
-                const sessions = await db.quizSessions.toArray();
-                for (const session of sessions) {
-                    await clearSessionLocalData(session.sessionId, removePending);
+                const allActive = await db.activeQuizzes.toArray();
+                for (const aq of allActive) {
+                    await clearActiveQuiz(aq.sessionId, removePending);
                 }
             }
         } catch (e) {
@@ -71,37 +70,33 @@
                 }
             }, 10000);
 
-            // Check if there is an unsynced submission
-            const pending = (await db.pendingSubmissions.where('synced').equals(0).toArray())
-                .filter((submission) => submission.tabId === tabId || submission.tabId === 'legacy');
-            if (pending.length > 0) {
+            // ── Step 1: Check for an unsynced pending submission from this tab ──
+            // The sessionId stored in sessionStorage tells us which submission is ours.
+            const thisTabSessionId = loadActiveSessionId();
+            const allPending = await db.pendingSubmissions.where('synced').equals(0).toArray();
+            const myPending = thisTabSessionId
+                ? allPending.filter(s => s.sessionId === thisTabSessionId)
+                : [];
+
+            if (myPending.length > 0) {
                 hasPendingSubmission = true;
-                activeQuizId = pending[0].quizId;
-                activeSessionId = pending[0].sessionId;
-                activeAttemptId = pending[0].attemptId;
-                activeAttemptToken = pending[0].attemptToken;
-                studentId = pending[0].studentId;
-            } else {
-                // Check for active crash recovery session
-                const savedState = [];
-                for (const state of await db.quizStates.toArray()) {
-                    const session = await db.quizSessions.get(state.sessionId);
-                    if (session && (session.tabId === tabId || session.tabId === 'legacy')) {
-                        savedState.push(state);
-                    }
-                }
-                if (savedState.length > 0) {
-                    const state = savedState[0];
-                    const qCount = await db.sessionQuestions.where('sessionId').equals(state.sessionId).count();
-                    if (qCount > 0) {
-                        activeQuizId = state.quizId;
-                        activeSessionId = state.sessionId;
-                        activeAttemptId = session.attemptId;
-                        activeAttemptToken = session.attemptToken;
-                        studentId = state.studentId;
-                    } else {
-                        await clearSessionLocalData(state.sessionId);
-                    }
+                activeQuizId = myPending[0].quizId;
+                activeSessionId = myPending[0].sessionId;
+                activeAttemptId = myPending[0].attemptId;
+                activeAttemptToken = myPending[0].attemptToken;
+                studentId = myPending[0].studentId;
+            } else if (thisTabSessionId) {
+                // ── Step 2: Crash recovery — look up the exact document by sessionId ──
+                const recovered = await db.activeQuizzes.get(thisTabSessionId);
+                if (recovered && recovered.questions.length > 0 && recovered.progress.remainingTime > 0) {
+                    activeQuizId = recovered.quizId;
+                    activeSessionId = recovered.sessionId;
+                    activeAttemptId = recovered.attemptId;
+                    activeAttemptToken = recovered.attemptToken;
+                    studentId = recovered.studentId;
+                } else {
+                    // Stale/empty doc — wipe it
+                    await db.activeQuizzes.delete(thisTabSessionId);
                 }
             }
 
@@ -152,7 +147,7 @@
                 );
                 
                 await db.pendingSubmissions.delete(submission.id!);
-                await clearQuizLocalData(submission.sessionId, false);
+                await clearActiveQuiz(submission.sessionId, false);
                 
                 isOnline = true;
                 
@@ -214,46 +209,43 @@
         const data = await startQuiz(quizId, studentId);
         const sessionId = createSessionId();
         const shuffledQuestions = shuffleArray(data.questions || []);
+        const now = new Date().toISOString();
+        const dur = Number(shuffledQuestions[0]?.duration) || 60;
 
-        const questionsToInsert = shuffledQuestions.map((q: any) => ({
-            id: `${sessionId}:${q.id}`,
+        // Single document write — no multi-table transaction required
+        await db.activeQuizzes.put({
             sessionId,
+            studentId: studentId!,
             quizId: data.quiz.id,
-            questionId: q.id,
-            text: q.text,
-            image: null,
-            imageData: null,
-            option1: q.option1,
-            option2: q.option2,
-            option3: q.option3,
-            option4: q.option4,
-            duration: Number(q.duration) || 60
-        }));
-
-        await db.transaction('rw', db.quizSessions, db.sessionQuizzes, db.sessionQuestions, async () => {
-            const now = new Date().toISOString();
-            await db.quizSessions.put({
-                sessionId,
-                tabId,
-                studentId,
-                quizId: data.quiz.id,
-                attemptId: data.attempt_id,
-                attemptToken: data.attempt_token,
-                createdAt: now,
-                lastSaved: now
-            });
-            await db.sessionQuizzes.put({
-                id: sessionId,
-                sessionId,
-                quizId: data.quiz.id,
+            attemptId: data.attempt_id,
+            attemptToken: data.attempt_token,
+            quiz: {
                 title: data.quiz.title,
                 duration: data.quiz.duration,
-                start_datetime: data.quiz.start_datetime
-            });
-
-            await db.sessionQuestions.where('sessionId').equals(sessionId).delete();
-            await db.sessionQuestions.bulkAdd(questionsToInsert);
+                start_datetime: data.quiz.start_datetime,
+                end_datetime: data.quiz.end_datetime,
+            },
+            questions: shuffledQuestions.map((q: any) => ({
+                questionId: q.id,
+                text: q.text,
+                image: null,
+                option1: q.option1,
+                option2: q.option2,
+                option3: q.option3,
+                option4: q.option4,
+                duration: Number(q.duration) || 60,
+            })),
+            answers: {},
+            progress: {
+                currentQuestionIndex: 0,
+                remainingTime: dur,
+                questionEndTime: Date.now() + dur * 1000,
+                lastSaved: now,
+            },
         });
+
+        // Persist sessionId to sessionStorage so crash recovery can find this exact document
+        saveActiveSessionId(sessionId);
 
         activeQuizId = quizId;
         activeSessionId = sessionId;
@@ -495,7 +487,6 @@
             <!-- Quiz Taking View -->
             <Quiz 
                 sessionId={activeSessionId!}
-                tabId={tabId}
                 attemptId={activeAttemptId!}
                 attemptToken={activeAttemptToken!}
                 quizId={activeQuizId} 

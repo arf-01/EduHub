@@ -1,15 +1,14 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { createSessionId, db, makeRecordId, type Question, type Quiz } from './db';
+    import { createSessionId, db, type ActiveQuiz, type QuestionData } from './db';
     import { submitQuiz } from './api';
     import { parseContentWithCode, highlightCodeSyntax, formatInlineCode } from './CodeHighlighter';
 
-    let { sessionId, tabId, attemptId, attemptToken, quizId, studentId, isOnline, onComplete, onOfflineSubmit, onQuizEnded } = $props<{
+    let { sessionId, attemptId, attemptToken, quizId, studentId, isOnline, onComplete, onOfflineSubmit, onQuizEnded } = $props<{
         sessionId: string,
-        tabId: string,
         attemptId: number,
         attemptToken: string,
-        quizId: number, 
+        quizId: number,
         studentId: string,
         isOnline: boolean,
         onComplete: (score: number, total: number) => void,
@@ -17,8 +16,9 @@
         onQuizEnded: (message: string) => void
     }>();
 
-    let quiz = $state<Quiz | null>(null);
-    let questions = $state<Question[]>([]);
+    // ── Local UI State ────────────────────────────────────────────────────────
+    let quizDoc = $state<ActiveQuiz | null>(null);
+    let questions = $state<QuestionData[]>([]);
     let currentQuestionIndex = $state(0);
     let selectedOption = $state<number | null>(null);
     let remainingTime = $state(0);
@@ -27,49 +27,72 @@
 
     let timerInterval: number;
 
+    // Convenience derived alias for the template
+    let quiz = $derived(quizDoc?.quiz ?? null);
+
     onMount(async () => {
-        quiz = await db.sessionQuizzes.get(sessionId) || null;
-        questions = await db.sessionQuestions.where('sessionId').equals(sessionId).toArray();
-        
-        if (!quiz || questions.length === 0) {
-            console.error("Quiz data not found in local DB.");
+        // Load the single document for this session
+        quizDoc = await db.activeQuizzes.get(sessionId) ?? null;
+
+        if (!quizDoc || quizDoc.questions.length === 0) {
+            console.error('Quiz data not found in local DB for session:', sessionId);
             return;
         }
 
-        const savedState = await db.quizStates.where('sessionId').equals(sessionId).first();
-        if (savedState && savedState.studentId === studentId && (savedState.remainingTime > 0 || savedState.questionEndTime)) {
-            const now = Date.now();
-            let qIndex = savedState.currentQuestionId;
-            let targetEnd = savedState.questionEndTime || (savedState.lastSaved ? (new Date(savedState.lastSaved).getTime() + savedState.remainingTime * 1000) : (now + savedState.remainingTime * 1000));
+        questions = quizDoc.questions;
 
+        function getQuizEndTimeMs(): number {
+            if (!quizDoc?.quiz?.end_datetime) return 0;
+            const ms = new Date(quizDoc.quiz.end_datetime).getTime();
+            return Number.isFinite(ms) ? ms : 0;
+        }
+
+        const quizEndMs = getQuizEndTimeMs();
+        if (quizEndMs > 0 && Date.now() >= quizEndMs) {
+            currentQuestionIndex = questions.length - 1;
+            remainingTime = 0;
+            questionEndTime = Date.now();
+            loadAnswerForCurrentQuestion();
+            await forceSubmit();
+            return;
+        }
+
+        // ── Crash / Reload Recovery ───────────────────────────────────────────
+        const p = quizDoc.progress;
+        if (p.questionEndTime > 0 || p.remainingTime > 0) {
+            const now = Date.now();
+            let qIndex = p.currentQuestionIndex;
+            let targetEnd = p.questionEndTime || (new Date(p.lastSaved).getTime() + p.remainingTime * 1000);
+
+            // Fast-forward through any questions whose timers already expired while the tab was closed
             while (now >= targetEnd && qIndex < questions.length - 1) {
                 qIndex += 1;
-                const nextQDuration = Number(questions[qIndex]?.duration) || 60;
-                targetEnd += nextQDuration * 1000;
+                targetEnd += (Number(questions[qIndex]?.duration) || 60) * 1000;
             }
 
             if (now >= targetEnd && qIndex >= questions.length - 1) {
+                // All time elapsed — auto-submit immediately
                 currentQuestionIndex = questions.length - 1;
                 remainingTime = 0;
                 questionEndTime = now;
-                await loadAnswerForCurrentQuestion();
+                loadAnswerForCurrentQuestion();
                 await forceSubmit();
                 return;
             } else {
                 currentQuestionIndex = Math.min(qIndex, questions.length - 1);
-                questionEndTime = targetEnd;
+                questionEndTime = quizEndMs > 0 ? Math.min(targetEnd, quizEndMs) : targetEnd;
                 remainingTime = Math.max(1, Math.ceil((questionEndTime - now) / 1000));
             }
         } else {
             currentQuestionIndex = 0;
-            const duration = Number(questions[0]?.duration) || 60;
-            questionEndTime = Date.now() + duration * 1000;
-            remainingTime = duration;
+            const dur = Number(questions[0]?.duration) || 60;
+            const target = Date.now() + dur * 1000;
+            questionEndTime = quizEndMs > 0 ? Math.min(target, quizEndMs) : target;
+            remainingTime = Math.max(0, Math.ceil((questionEndTime - Date.now()) / 1000));
         }
 
-        await loadAnswerForCurrentQuestion();
-        await saveState();
-
+        loadAnswerForCurrentQuestion();
+        await persistProgress();
         startTimer();
     });
 
@@ -77,15 +100,28 @@
         clearInterval(timerInterval);
     });
 
+    // ── Timer ─────────────────────────────────────────────────────────────────
+
+    function getQuizEndTimeMs(): number {
+        if (!quizDoc?.quiz?.end_datetime) return 0;
+        const ms = new Date(quizDoc.quiz.end_datetime).getTime();
+        return Number.isFinite(ms) ? ms : 0;
+    }
+
     function startTimer() {
         clearInterval(timerInterval);
-        timerInterval = window.setInterval(() => {
+        timerInterval = window.setInterval(async () => {
             const now = Date.now();
+            const quizEndMs = getQuizEndTimeMs();
+            if (quizEndMs > 0 && now >= quizEndMs) {
+                remainingTime = 0;
+                await forceSubmit();
+                return;
+            }
             remainingTime = Math.max(0, Math.ceil((questionEndTime - now) / 1000));
-            saveState();
-
+            await persistProgress();
             if (remainingTime <= 0) {
-                handleTimeExpiry();
+                await handleTimeExpiry();
             }
         }, 1000);
     }
@@ -98,47 +134,43 @@
         }
     }
 
-    async function saveState() {
-        const stateToSave = {
-            sessionId,
-            studentId,
-            quizId,
-            currentQuestionId: currentQuestionIndex,
-            remainingTime,
-            questionEndTime,
-            lastSaved: new Date().toISOString()
-        };
+    // ── State Persistence ─────────────────────────────────────────────────────
+    // One single update call — no multi-table coordination required.
 
-        const existing = await db.quizStates.where('sessionId').equals(sessionId).first();
-        if (existing) {
-            await db.quizStates.update(existing.id!, stateToSave);
-        } else {
-            await db.quizStates.add(stateToSave);
-        }
-        await db.quizSessions.update(sessionId, { lastSaved: stateToSave.lastSaved });
+    async function persistProgress() {
+        if (!quizDoc) return;
+        await db.activeQuizzes.update(sessionId, {
+            progress: {
+                currentQuestionIndex,
+                remainingTime,
+                questionEndTime,
+                lastSaved: new Date().toISOString(),
+            }
+        });
     }
 
-    async function loadAnswerForCurrentQuestion() {
-        if (questions.length === 0) return;
+    // ── Answer Handling ───────────────────────────────────────────────────────
+
+    function loadAnswerForCurrentQuestion() {
+        if (!quizDoc || questions.length === 0) return;
         const currentQ = questions[currentQuestionIndex];
-        const savedAnswer = await db.sessionAnswers.get(makeRecordId(sessionId, currentQ.questionId));
-        selectedOption = savedAnswer ? savedAnswer.selectedOption : null;
+        const saved = quizDoc.answers[currentQ.questionId];
+        selectedOption = saved ? saved.selectedOption : null;
     }
 
     async function handleOptionSelect(optionNum: number) {
+        if (!quizDoc) return;
         selectedOption = optionNum;
         const currentQ = questions[currentQuestionIndex];
-        
-        await db.sessionAnswers.put({
-            id: makeRecordId(sessionId, currentQ.questionId),
-            sessionId,
-            quizId,
+
+        quizDoc.answers[currentQ.questionId] = {
             questionId: currentQ.questionId,
             selectedOption: optionNum,
-            answeredAt: new Date().toISOString()
-        });
+            answeredAt: new Date().toISOString(),
+        };
 
-        await saveState();
+        await db.activeQuizzes.update(sessionId, { answers: quizDoc.answers });
+        await persistProgress();
     }
 
     async function nextQuestion() {
@@ -146,28 +178,31 @@
             selectedOption = null;
             currentQuestionIndex += 1;
             const dur = Number(questions[currentQuestionIndex]?.duration) || 60;
-            questionEndTime = Date.now() + dur * 1000;
-            remainingTime = dur;
-            await loadAnswerForCurrentQuestion();
-            await saveState();
+            const target = Date.now() + dur * 1000;
+            const quizEndMs = getQuizEndTimeMs();
+            questionEndTime = quizEndMs > 0 ? Math.min(target, quizEndMs) : target;
+            remainingTime = Math.max(0, Math.ceil((questionEndTime - Date.now()) / 1000));
+            loadAnswerForCurrentQuestion();
+            await persistProgress();
         }
     }
+
+    // ── Submission ────────────────────────────────────────────────────────────
 
     async function forceSubmit() {
         if (isSubmitting) return;
         isSubmitting = true;
         clearInterval(timerInterval);
-        
+
         try {
-            const allSavedAnswers = await db.sessionAnswers.where('sessionId').equals(sessionId).toArray();
-            
-            const payloadAnswers = allSavedAnswers.map(a => ({
+            // Build flat answers array from the document's answers map
+            const payloadAnswers = Object.values(quizDoc?.answers ?? {}).map(a => ({
                 questionId: a.questionId,
                 selectedOption: a.selectedOption,
-                answeredAt: a.answeredAt
+                answeredAt: a.answeredAt,
             }));
-            const submissionId = createSessionId();
 
+            const submissionId = createSessionId();
             let submittedOnline = false;
 
             if (isOnline && navigator.onLine) {
@@ -176,34 +211,28 @@
                         submissionId,
                         sessionId,
                         attemptId,
-                        attemptToken
+                        attemptToken,
                     });
-                    await db.quizStates.where('sessionId').equals(sessionId).delete();
-                    await db.sessionAnswers.where('sessionId').equals(sessionId).delete();
-                    await db.sessionQuestions.where('sessionId').equals(sessionId).delete();
-                    await db.sessionQuizzes.delete(sessionId);
-                    await db.quizSessions.delete(sessionId);
+                    // Success — wipe the active quiz document
+                    await db.activeQuizzes.delete(sessionId);
                     onComplete(response.score, response.total);
                     submittedOnline = true;
                 } catch (netError: any) {
                     if (netError?.quizEnded) {
-                        await db.quizStates.where('sessionId').equals(sessionId).delete();
-                        await db.sessionAnswers.where('sessionId').equals(sessionId).delete();
-                        await db.sessionQuestions.where('sessionId').equals(sessionId).delete();
-                        await db.sessionQuizzes.delete(sessionId);
-                        await db.quizSessions.delete(sessionId);
+                        await db.activeQuizzes.delete(sessionId);
                         onQuizEnded(netError.message || 'This quiz has already ended. Submissions are no longer accepted.');
                         return;
                     }
-                    console.warn("Online submission failed. Queueing offline...", netError);
+                    console.warn('Online submission failed. Queueing offline...', netError);
                 }
             }
 
             if (!submittedOnline) {
+                // Save to offline outbox. Keep the activeQuizzes document alive as a backup,
+                // but zero out progress so crash recovery won't re-launch the countdown.
                 await db.pendingSubmissions.add({
                     submissionId,
                     sessionId,
-                    tabId,
                     studentId,
                     quizId,
                     attemptId,
@@ -211,14 +240,24 @@
                     answers: payloadAnswers,
                     createdAt: new Date().toISOString(),
                     attemptCount: 0,
-                    synced: 0
+                    synced: 0,
                 });
-                
-                await db.quizStates.where('sessionId').equals(sessionId).delete();
+
+                if (quizDoc) {
+                    await db.activeQuizzes.update(sessionId, {
+                        progress: {
+                            currentQuestionIndex: 0,
+                            remainingTime: 0,
+                            questionEndTime: 0,
+                            lastSaved: new Date().toISOString(),
+                        }
+                    });
+                }
+
                 onOfflineSubmit();
             }
         } catch (error: any) {
-            console.error("Submission failed", error);
+            console.error('Submission failed', error);
         } finally {
             isSubmitting = false;
         }
@@ -243,12 +282,11 @@
             <h3 class="text-lg font-bold text-white">Session Expired or Empty</h3>
             <p class="text-xs text-slate-400">No cached questions found for this quiz session.</p>
         </div>
-        <button 
-            type="button" 
+        <button
+            type="button"
             onclick={async () => {
                 try {
-                    await db.quizStates.where('sessionId').equals(sessionId).delete();
-                    await db.sessionAnswers.where('sessionId').equals(sessionId).delete();
+                    await db.activeQuizzes.delete(sessionId);
                 } catch (e) {}
                 window.location.reload();
             }}
@@ -259,7 +297,7 @@
     </div>
 {:else}
     <div class="edu-card w-full max-w-3xl overflow-hidden flex flex-col h-[82vh] max-h-[850px] shadow-2xl shadow-black/60 border-slate-800">
-        
+
         <!-- Quiz Header -->
         <div class="bg-slate-900/90 border-b border-slate-800 p-5 sm:px-8 flex justify-between items-center shrink-0">
             <div>
@@ -327,10 +365,10 @@
             <!-- Options Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {#each [1, 2, 3, 4] as optNum}
-                    {@const optText = currentQuestion[`option${optNum}` as keyof Question]}
+                    {@const optText = currentQuestion[`option${optNum}` as keyof QuestionData]}
                     {@const isSelected = selectedOption === optNum}
                     {#if optText}
-                        <button 
+                        <button
                             class="w-full text-left p-4 rounded-xl border-1.5 transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer {isSelected ? 'border-indigo-500 bg-indigo-950/60 shadow-lg shadow-indigo-600/15 ring-2 ring-indigo-500/40 text-indigo-200' : 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-800/80 text-slate-200'}"
                             onclick={() => handleOptionSelect(optNum)}
                         >
@@ -381,7 +419,7 @@
             <!-- Action Button: Next or Submit -->
             <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                 {#if currentQuestionIndex === questions.length - 1}
-                    <button 
+                    <button
                         type="button"
                         onclick={forceSubmit}
                         disabled={isSubmitting}
@@ -398,7 +436,7 @@
                         {/if}
                     </button>
                 {:else}
-                    <button 
+                    <button
                         type="button"
                         onclick={nextQuestion}
                         class="edu-btn-primary w-full sm:w-auto px-6 py-2.5 text-sm font-bold shadow-indigo-700/30"
