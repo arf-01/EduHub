@@ -21,9 +21,16 @@
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10 edu-animate-slide-up">
             <div>
                 <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-1">My Quizzes</h1>
-                <p class="text-sm" style="color:var(--edu-text2);">
-                    {{ $quizzes->count() }} {{ Str::plural('quiz', $quizzes->count()) }} in your library
-                </p>
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3 text-sm" style="color:var(--edu-text2);">
+                    <span>{{ $quizzes->count() }} {{ Str::plural('quiz', $quizzes->count()) }} in your library</span>
+                    @if(Auth::check() && Auth::user()->room_name)
+                        <span class="text-slate-600">•</span>
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-xs font-medium bg-indigo-500/10 border-indigo-500/25 text-indigo-300">
+                            <span class="text-slate-400">Room:</span>
+                            <span class="font-mono font-bold text-white tracking-wide" id="library-teacher-room">{{ Auth::user()->room_name }}</span>
+                        </span>
+                    @endif
+                </div>
             </div>
             <a href="{{ route('teacher.view') }}"
                id="create-quiz-btn"

@@ -38,6 +38,34 @@
         <div class="flex items-center gap-1 sm:gap-2">
 
             @if($role === 'teacher')
+                @if(Auth::check() && Auth::user()->room_name)
+                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium bg-indigo-500/10 border-indigo-500/30 text-indigo-200"
+                         title="Your Quiz Room Name for Students">
+                        <span class="text-indigo-400 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                            </svg>
+                            <span class="hidden sm:inline">Room:</span>
+                        </span>
+                        <span class="font-mono font-bold text-white tracking-wide" id="nav-teacher-room">{{ Auth::user()->room_name }}</span>
+                        <button type="button"
+                                onclick="navigator.clipboard.writeText('{{ Auth::user()->room_name }}'); const t=this.querySelector('.copy-feedback'); t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1500);"
+                                class="relative text-indigo-300 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
+                                title="Copy Room Name"
+                                aria-label="Copy Room Name">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                            <span class="copy-feedback hidden absolute -bottom-7 right-0 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-emerald-400 font-semibold shadow-lg whitespace-nowrap z-50">
+                                Copied!
+                            </span>
+                        </button>
+                    </div>
+
+                    {{-- Divider --}}
+                    <span class="hidden sm:block w-px h-5 bg-slate-700 mx-1"></span>
+                @endif
+
                 <a href="{{ route('quiz.list') }}" id="nav-my-quizzes"
                    class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-all">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

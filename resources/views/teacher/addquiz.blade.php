@@ -28,7 +28,14 @@
                     </svg>
                 </div>
                 <h1 class="text-2xl font-extrabold text-white mb-1">Create a New Quiz</h1>
-                <p class="text-sm" style="color:var(--edu-text2);">Give your quiz a title to start adding questions</p>
+                <p class="text-sm mb-3" style="color:var(--edu-text2);">Give your quiz a title to start adding questions</p>
+
+                @if(Auth::check() && Auth::user()->room_name)
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-medium bg-indigo-500/10 border-indigo-500/25 text-indigo-300">
+                        <span class="text-slate-400">Student Room:</span>
+                        <span class="font-mono font-bold text-white tracking-wide" id="hero-teacher-room">{{ Auth::user()->room_name }}</span>
+                    </div>
+                @endif
             </div>
 
             @if (session('success'))
